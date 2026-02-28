@@ -3,6 +3,17 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "cli": "bun run src/cli.ts",
+    "fetch": "bun run src/cli.ts fetch",
+    "search": "bun run src/cli.ts search",
+    "download": "bun run src/cli.ts download",
+    "all": "bun run src/cli.ts all"
+  },
+  "dependencies": {
+    "youtube-sr": "^4.3.11",
+    "fast-xml-parser": "^4.3.6"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
