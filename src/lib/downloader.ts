@@ -57,6 +57,7 @@ export async function downloadMp3(
 
   const args = [
     "yt-dlp",
+    "-f", "bestaudio",
     "--extract-audio",
     "--audio-format", "mp3",
     "--audio-quality", opts.audioQuality ?? "0",

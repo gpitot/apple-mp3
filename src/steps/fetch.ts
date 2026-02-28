@@ -19,6 +19,7 @@ export interface FetchOptions {
   playlistFilter?: string;
   fromXml?: string;
   fromJson?: string;
+  fromCsv?: string;
   listPlaylists?: boolean;
 }
 
@@ -31,6 +32,8 @@ export async function runFetch(opts: FetchOptions): Promise<FetchOutput> {
 
   if (opts.fromJson) {
     ({ songs, source } = await fetchFromJson(opts.fromJson));
+  } else if (opts.fromCsv) {
+    ({ songs, source, playlists } = await fetchFromCsv(opts.fromCsv));
   } else if (opts.fromXml) {
     ({ songs, source, playlists } = await fetchFromXml(opts.fromXml, opts.playlistFilter));
   } else {
@@ -99,6 +102,109 @@ async function fetchFromXml(
 ): Promise<{ songs: Song[]; source: string; playlists: Playlist[] }> {
   const { songs, playlists } = await parseItunesLibraryXml(xmlPath, playlistFilter);
   return { songs, playlists, source: `itunes-xml:${path.basename(xmlPath)}` };
+}
+
+async function fetchFromCsv(
+  csvPath: string
+): Promise<{ songs: Song[]; source: string; playlists: Playlist[] }> {
+  log.info(`Loading songs from CSV: ${csvPath}`);
+  const raw = await Bun.file(csvPath).text();
+  const lines = raw.split("\n").filter((line) => line.trim());
+
+  if (lines.length < 2) {
+    throw new Error(`CSV file is empty or has no data rows: ${csvPath}`);
+  }
+
+  // Parse header to find column indices (strip BOM if present)
+  const header = parseCsvLine(lines[0]!.replace(/^\uFEFF/, ""));
+  const col = (name: string) => {
+    const idx = header.indexOf(name);
+    if (idx === -1) throw new Error(`CSV missing required column: "${name}"`);
+    return idx;
+  };
+
+  const iTrack = col("Track name");
+  const iArtist = col("Artist name");
+  const iAlbum = col("Album");
+  const iPlaylist = col("Playlist name");
+  const iIsrc = header.indexOf("ISRC");
+  const iAppleId = header.indexOf("Apple - id");
+
+  const songs: Song[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const fields = parseCsvLine(lines[i]!);
+    if (fields.length < header.length) continue;
+
+    songs.push({
+      id: iAppleId >= 0 && fields[iAppleId] ? fields[iAppleId]! : `csv-${i}`,
+      title: fields[iTrack]!,
+      artist: fields[iArtist]!,
+      album: fields[iAlbum]!,
+      playlistName: fields[iPlaylist] || undefined,
+      isrc: iIsrc >= 0 && fields[iIsrc] ? fields[iIsrc] : undefined,
+      durationMs: 0,
+    });
+  }
+
+  // Group songs by playlist name
+  const playlistMap = new Map<string, string[]>();
+  for (const song of songs) {
+    const plName = song.playlistName ?? "Uncategorized";
+    const ids = playlistMap.get(plName);
+    if (ids) {
+      ids.push(song.id);
+    } else {
+      playlistMap.set(plName, [song.id]);
+    }
+  }
+  const playlists: Playlist[] = [...playlistMap.entries()].map(([name, songIds]) => ({
+    id: name,
+    name,
+    songIds,
+  }));
+
+  log.success(`Loaded ${songs.length} songs in ${playlists.length} playlists from ${csvPath}`);
+  return { songs, playlists, source: `csv:${path.basename(csvPath)}` };
+}
+
+/** Parse a single CSV line, handling quoted fields */
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === '"') {
+      // Quoted field
+      let value = "";
+      i++; // skip opening quote
+      while (i < line.length) {
+        if (line[i] === '"') {
+          if (i + 1 < line.length && line[i + 1] === '"') {
+            value += '"';
+            i += 2;
+          } else {
+            i++; // skip closing quote
+            break;
+          }
+        } else {
+          value += line[i];
+          i++;
+        }
+      }
+      fields.push(value);
+      if (i < line.length && line[i] === ",") i++; // skip comma
+    } else {
+      // Unquoted field
+      const comma = line.indexOf(",", i);
+      if (comma === -1) {
+        fields.push(line.slice(i).trim());
+        break;
+      } else {
+        fields.push(line.slice(i, comma).trim());
+        i = comma + 1;
+      }
+    }
+  }
+  return fields;
 }
 
 async function fetchFromJson(

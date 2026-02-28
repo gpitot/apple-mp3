@@ -9,8 +9,14 @@
  * Requires yt-dlp: pip install yt-dlp
  */
 import { log } from "../lib/logger";
-import type { DownloadOutput, DownloadResult, Playlist, SearchOutput } from "../lib/types";
+import type {
+  DownloadOutput,
+  DownloadResult,
+  Playlist,
+  SearchOutput,
+} from "../lib/types";
 import { downloadMp3, checkYtDlp } from "../lib/downloader";
+import { sleep } from "../lib/youtube";
 import { copyFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -22,9 +28,12 @@ export interface DownloadOptions {
   embedThumbnail?: boolean;
   limitTo?: number;
   onlyPlaylist?: string;
+  delayMs?: number;
 }
 
-export async function runDownload(opts: DownloadOptions): Promise<DownloadOutput> {
+export async function runDownload(
+  opts: DownloadOptions,
+): Promise<DownloadOutput> {
   log.header("Step 3: Download MP3s");
 
   // Check yt-dlp is available
@@ -34,17 +43,27 @@ export async function runDownload(opts: DownloadOptions): Promise<DownloadOutput
   await Bun.$`mkdir -p ${opts.outputDir}`.quiet();
 
   // Load search results
-  const inputRaw = await Bun.file(opts.inputFile).text().catch(() => {
-    throw new Error(`Input file not found: ${opts.inputFile}\nRun 'search' step first.`);
-  });
+  const inputRaw = await Bun.file(opts.inputFile)
+    .text()
+    .catch(() => {
+      throw new Error(
+        `Input file not found: ${opts.inputFile}\nRun 'search' step first.`,
+      );
+    });
   const input: SearchOutput = JSON.parse(inputRaw);
 
   let songs = input.songs.filter((s) => s.searchStatus === "found");
 
   if (opts.onlyPlaylist) {
     const before = songs.length;
-    songs = songs.filter((s) => s.playlistName === opts.onlyPlaylist || s.playlistId === opts.onlyPlaylist);
-    log.info(`Filtered to playlist "${opts.onlyPlaylist}": ${songs.length}/${before} songs`);
+    songs = songs.filter(
+      (s) =>
+        s.playlistName === opts.onlyPlaylist ||
+        s.playlistId === opts.onlyPlaylist,
+    );
+    log.info(
+      `Filtered to playlist "${opts.onlyPlaylist}": ${songs.length}/${before} songs`,
+    );
   }
 
   if (opts.limitTo) {
@@ -52,7 +71,9 @@ export async function runDownload(opts: DownloadOptions): Promise<DownloadOutput
   }
 
   const skipped = input.songs.length - songs.length;
-  log.info(`${input.songs.length} total songs, ${songs.length} with YouTube URLs, ${skipped} skipped (no URL)`);
+  log.info(
+    `${input.songs.length} total songs, ${songs.length} with YouTube URLs, ${skipped} skipped (no URL)`,
+  );
 
   // Build reverse map: songId → playlist names
   const playlists: Playlist[] = input.playlists ?? [];
@@ -84,7 +105,9 @@ export async function runDownload(opts: DownloadOptions): Promise<DownloadOutput
 
   const total = songs.length;
   const results: DownloadResult[] = [];
-  let downloaded = 0, alreadyExists = 0, errors = 0;
+  let downloaded = 0,
+    alreadyExists = 0,
+    errors = 0;
   const startedAt = new Date().toISOString();
 
   for (let i = 0; i < songs.length; i++) {
@@ -93,9 +116,10 @@ export async function runDownload(opts: DownloadOptions): Promise<DownloadOutput
 
     // Determine playlist folder(s) for this song
     const plNames = songPlaylistMap.get(song.id);
-    const primaryFolder = plNames && plNames.length > 0
-      ? sanitizeDirName(plNames[0]!)
-      : "Uncategorized";
+    const primaryFolder =
+      plNames && plNames.length > 0
+        ? sanitizeDirName(plNames[0]!)
+        : "Uncategorized";
     const songOutputDir = path.join(opts.outputDir, primaryFolder);
 
     const result = await downloadMp3(song, {
@@ -108,16 +132,23 @@ export async function runDownload(opts: DownloadOptions): Promise<DownloadOutput
 
     if (result.downloadStatus === "downloaded") {
       downloaded++;
-      log.success(`Downloaded: ${primaryFolder}/${path.basename(result.filePath ?? "")}`);
+      log.success(
+        `Downloaded: ${primaryFolder}/${path.basename(result.filePath ?? "")}`,
+      );
 
       // Copy to additional playlist folders
       if (plNames && plNames.length > 1 && result.filePath) {
         for (let j = 1; j < plNames.length; j++) {
-          const extraDir = path.join(opts.outputDir, sanitizeDirName(plNames[j]!));
+          const extraDir = path.join(
+            opts.outputDir,
+            sanitizeDirName(plNames[j]!),
+          );
           const destPath = path.join(extraDir, path.basename(result.filePath));
           try {
             await copyFile(result.filePath, destPath);
-            log.info(`Copied to ${sanitizeDirName(plNames[j]!)}/${path.basename(result.filePath)}`);
+            log.info(
+              `Copied to ${sanitizeDirName(plNames[j]!)}/${path.basename(result.filePath)}`,
+            );
           } catch (err) {
             log.warn(`Failed to copy to ${destPath}: ${err}`);
           }
@@ -127,12 +158,29 @@ export async function runDownload(opts: DownloadOptions): Promise<DownloadOutput
       alreadyExists++;
     } else if (result.downloadStatus === "error") {
       errors++;
-      log.error(`Failed: ${song.artist} - ${song.title}: ${result.downloadError?.slice(0, 100)}`);
+      log.error(
+        `Failed: ${song.artist} - ${song.title}: ${result.downloadError?.slice(0, 100)}`,
+      );
     }
 
     // Save progress every 5 songs
     if ((i + 1) % 5 === 0 || i === songs.length - 1) {
-      await saveStatus(opts.statusFile, results, startedAt, opts.outputDir, total, downloaded, alreadyExists, skipped, errors);
+      await saveStatus(
+        opts.statusFile,
+        results,
+        startedAt,
+        opts.outputDir,
+        total,
+        downloaded,
+        alreadyExists,
+        skipped,
+        errors,
+      );
+    }
+
+    // Rate limiting delay (skip for cached songs and last song)
+    if (i < songs.length - 1 && result.downloadStatus === "downloaded") {
+      await sleep(opts.delayMs ?? 1000);
     }
   }
 
@@ -146,7 +194,7 @@ export async function runDownload(opts: DownloadOptions): Promise<DownloadOutput
     alreadyExists,
     skipped,
     errors,
-    new Date().toISOString()
+    new Date().toISOString(),
   );
 
   log.summary([
@@ -173,7 +221,7 @@ async function saveStatus(
   alreadyExists: number,
   skipped: number,
   errors: number,
-  finishedAt?: string
+  finishedAt?: string,
 ): Promise<DownloadOutput> {
   const output: DownloadOutput = {
     startedAt,

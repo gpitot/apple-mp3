@@ -45,15 +45,17 @@ COMMANDS
 FETCH OPTIONS
   --from-xml <file>      Import from iTunes Library XML export
   --from-json <file>     Import from a JSON file (Song[] or FetchOutput)
+  --from-csv <file>      Import from an Apple Music CSV export
   --playlist <id|name>   Filter to a specific playlist
   --output <file>        Output file (default: ${DEFAULTS.songsFile})
 
 SEARCH OPTIONS
   --input <file>         Input file (default: ${DEFAULTS.songsFile})
   --output <file>        Output file (default: ${DEFAULTS.urlsFile})
-  --delay <ms>           Delay between requests in ms (default: 800)
+  --delay <ms>           Delay between requests in ms (search: 800, download: 1000)
   --limit <n>            Only process first N songs (for testing)
   --no-resume            Re-search all songs even if already found
+  --playlist <id|name>   Only search songs from this playlist
 
 DOWNLOAD OPTIONS
   --input <file>         Input file (default: ${DEFAULTS.urlsFile})
@@ -61,6 +63,7 @@ DOWNLOAD OPTIONS
   --status-file <file>   Status output file (default: ${DEFAULTS.statusFile})
   --quality <0|2|5>      Audio quality: 0=best, 5=good, 9=worst (default: 0)
   --embed-thumbnail      Embed YouTube thumbnail as album art
+  --delay <ms>           Delay between downloads in ms (default: 1000)
   --limit <n>            Only download first N songs
   --playlist <name>      Only download songs from this playlist
 
@@ -103,6 +106,7 @@ async function main() {
     options: {
       "from-xml": { type: "string" },
       "from-json": { type: "string" },
+      "from-csv": { type: "string" },
       playlist: { type: "string", short: "p" },
       input: { type: "string", short: "i" },
       output: { type: "string", short: "o" },
@@ -135,6 +139,7 @@ async function main() {
           playlistFilter: values.playlist ? String(values.playlist) : undefined,
           fromXml: values["from-xml"] ? String(values["from-xml"]) : undefined,
           fromJson: values["from-json"] ? String(values["from-json"]) : undefined,
+          fromCsv: values["from-csv"] ? String(values["from-csv"]) : undefined,
         });
         break;
 
@@ -153,6 +158,7 @@ async function main() {
           delayMs: values.delay ? parseInt(String(values.delay)) : undefined,
           limitTo: values.limit ? parseInt(String(values.limit)) : undefined,
           resume: !values["no-resume"],
+          playlistFilter: values.playlist ? String(values.playlist) : undefined,
         });
         break;
 
@@ -166,6 +172,7 @@ async function main() {
           embedThumbnail: values["embed-thumbnail"] === true ? true : undefined,
           limitTo: values.limit ? parseInt(String(values.limit)) : undefined,
           onlyPlaylist: values.playlist ? String(values.playlist) : undefined,
+          delayMs: values.delay ? parseInt(String(values.delay)) : undefined,
         });
         break;
 
@@ -175,6 +182,7 @@ async function main() {
           playlistFilter: values.playlist ? String(values.playlist) : undefined,
           fromXml: values["from-xml"] ? String(values["from-xml"]) : undefined,
           fromJson: values["from-json"] ? String(values["from-json"]) : undefined,
+          fromCsv: values["from-csv"] ? String(values["from-csv"]) : undefined,
         });
         await runSearch({
           inputFile: DEFAULTS.songsFile,
@@ -182,6 +190,7 @@ async function main() {
           delayMs: values.delay ? parseInt(String(values.delay)) : undefined,
           limitTo: values.limit ? parseInt(String(values.limit)) : undefined,
           resume: !values["no-resume"],
+          playlistFilter: values.playlist ? String(values.playlist) : undefined,
         });
         await runDownload({
           inputFile: DEFAULTS.urlsFile,
@@ -190,6 +199,7 @@ async function main() {
           audioQuality: (values.quality as "0" | "2" | "5") ?? "0",
           embedThumbnail: values["embed-thumbnail"] === true ? true : undefined,
           onlyPlaylist: values.playlist ? String(values.playlist) : undefined,
+          delayMs: values.delay ? parseInt(String(values.delay)) : undefined,
         });
         break;
 

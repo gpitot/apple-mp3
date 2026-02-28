@@ -17,6 +17,7 @@ export interface SearchOptions {
   delayMs?: number;   // Delay between searches (default: 800ms)
   limitTo?: number;   // Only process first N songs (for testing)
   resume?: boolean;   // Skip already-searched songs (default: true)
+  playlistFilter?: string; // Only search songs from this playlist (name or ID)
 }
 
 export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
@@ -43,9 +44,23 @@ export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
     }
   }
 
+  let filteredSongs = input.songs;
+
+  if (opts.playlistFilter) {
+    const before = filteredSongs.length;
+    filteredSongs = filteredSongs.filter(
+      (s) =>
+        s.playlistName === opts.playlistFilter ||
+        s.playlistId === opts.playlistFilter,
+    );
+    log.info(
+      `Filtered to playlist "${opts.playlistFilter}": ${filteredSongs.length}/${before} songs`,
+    );
+  }
+
   const delay = opts.delayMs ?? 800;
   const apiKey = process.env.YOUTUBE_API_KEY;
-  const songs = opts.limitTo ? input.songs.slice(0, opts.limitTo) : input.songs;
+  const songs = opts.limitTo ? filteredSongs.slice(0, opts.limitTo) : filteredSongs;
   const total = songs.length;
 
   const results: SongWithUrl[] = [];
