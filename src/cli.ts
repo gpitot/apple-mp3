@@ -163,7 +163,7 @@ async function main() {
           statusFile: String(values["status-file"] ?? DEFAULTS.statusFile),
           outputDir: String(values["output-dir"] ?? DEFAULTS.downloadsDir),
           audioQuality: (values.quality as "0" | "2" | "5") ?? "0",
-          embedThumbnail: values["embed-thumbnail"],
+          embedThumbnail: values["embed-thumbnail"] === true ? true : undefined,
           limitTo: values.limit ? parseInt(String(values.limit)) : undefined,
           onlyPlaylist: values.playlist ? String(values.playlist) : undefined,
         });
@@ -188,7 +188,7 @@ async function main() {
           statusFile: DEFAULTS.statusFile,
           outputDir: String(values["output-dir"] ?? DEFAULTS.downloadsDir),
           audioQuality: (values.quality as "0" | "2" | "5") ?? "0",
-          embedThumbnail: values["embed-thumbnail"],
+          embedThumbnail: values["embed-thumbnail"] === true ? true : undefined,
           onlyPlaylist: values.playlist ? String(values.playlist) : undefined,
         });
         break;

@@ -1,3 +1,9 @@
+export interface Playlist {
+  id: string;
+  name: string;
+  songIds: string[];
+}
+
 export interface Song {
   id: string;
   title: string;
@@ -35,6 +41,7 @@ export interface FetchOutput {
   playlistFilter?: string;
   totalSongs: number;
   songs: Song[];
+  playlists?: Playlist[];
 }
 
 export interface SearchOutput {
@@ -44,6 +51,7 @@ export interface SearchOutput {
   notFoundCount: number;
   errorCount: number;
   songs: SongWithUrl[];
+  playlists?: Playlist[];
 }
 
 export interface DownloadOutput {

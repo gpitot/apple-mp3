@@ -1,4 +1,4 @@
-import YouTube from "youtube-sr";
+import YouTube, { Video } from "youtube-sr";
 import type { Song, SongWithUrl } from "./types";
 import { log } from "./logger";
 
@@ -78,9 +78,8 @@ async function searchViaApi(
     throw new Error(`YouTube API ${res.status}: ${body.slice(0, 200)}`);
   }
 
-  const data = await res.json();
-  const items: Array<{ id: { videoId: string }; snippet: { title: string } }> =
-    data.items ?? [];
+  const data = await res.json() as { items?: Array<{ id: { videoId: string }; snippet: { title: string } }> };
+  const items = data.items ?? [];
 
   if (items.length === 0) {
     return {
@@ -90,8 +89,8 @@ async function searchViaApi(
     };
   }
 
-  const videoId = items[0].id.videoId;
-  const title = items[0].snippet.title;
+  const videoId = items[0]!.id.videoId;
+  const title = items[0]!.snippet.title;
 
   return {
     searchQuery: query,
@@ -105,9 +104,9 @@ async function searchViaApi(
 
 // Prefer results with "official", "audio", "lyrics" in the title,
 // and deprioritize covers/live/acoustic.
-function pickBestResult(results: YouTube.Video[], query: string): YouTube.Video {
+function pickBestResult(results: Video[], query: string): Video {
   const lower = query.toLowerCase();
-  const [artist, ...titleParts] = lower.split(" - ");
+  const [artist = "", ...titleParts] = lower.split(" - ");
   const title = titleParts.join(" - ");
 
   const scored = results.map((v) => {
@@ -126,7 +125,7 @@ function pickBestResult(results: YouTube.Video[], query: string): YouTube.Video 
   });
 
   scored.sort((a, b) => b.score - a.score);
-  return scored[0].v;
+  return scored[0]!.v;
 }
 
 export async function sleep(ms: number): Promise<void> {

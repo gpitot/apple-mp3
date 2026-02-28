@@ -8,7 +8,7 @@
  * Set YOUTUBE_API_KEY for reliable searches, otherwise scraping is used.
  */
 import { log } from "../lib/logger";
-import type { FetchOutput, SearchOutput, SongWithUrl } from "../lib/types";
+import type { FetchOutput, Playlist, SearchOutput, SongWithUrl } from "../lib/types";
 import { searchYouTube, sleep } from "../lib/youtube";
 
 export interface SearchOptions {
@@ -52,7 +52,7 @@ export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
   let found = 0, notFound = 0, errors = 0, skipped = 0;
 
   for (let i = 0; i < songs.length; i++) {
-    const song = songs[i];
+    const song = songs[i]!;
 
     // Check if already searched
     const existing = existingSongs.get(song.id);
@@ -83,7 +83,7 @@ export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
 
     // Save progress every 10 songs
     if ((i + 1) % 10 === 0) {
-      await saveOutput(opts.outputFile, results, total, found, notFound, errors);
+      await saveOutput(opts.outputFile, results, total, found, notFound, errors, input.playlists);
     }
 
     // Rate limiting delay (skip for last song)
@@ -92,7 +92,7 @@ export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
     }
   }
 
-  const output = await saveOutput(opts.outputFile, results, total, found, notFound, errors);
+  const output = await saveOutput(opts.outputFile, results, total, found, notFound, errors, input.playlists);
 
   log.summary([
     ["Total songs", total],
@@ -114,7 +114,8 @@ async function saveOutput(
   total: number,
   found: number,
   notFound: number,
-  errors: number
+  errors: number,
+  playlists?: Playlist[]
 ): Promise<SearchOutput> {
   const output: SearchOutput = {
     searchedAt: new Date().toISOString(),
@@ -123,6 +124,7 @@ async function saveOutput(
     notFoundCount: notFound,
     errorCount: errors,
     songs,
+    playlists,
   };
   await Bun.write(outputFile, JSON.stringify(output, null, 2));
   return output;

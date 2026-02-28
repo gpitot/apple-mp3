@@ -9,8 +9,9 @@
  * Requires yt-dlp: pip install yt-dlp
  */
 import { log } from "../lib/logger";
-import type { DownloadOutput, DownloadResult, SearchOutput } from "../lib/types";
+import type { DownloadOutput, DownloadResult, Playlist, SearchOutput } from "../lib/types";
 import { downloadMp3, checkYtDlp } from "../lib/downloader";
+import { copyFile } from "node:fs/promises";
 import path from "node:path";
 
 export interface DownloadOptions {
@@ -53,17 +54,52 @@ export async function runDownload(opts: DownloadOptions): Promise<DownloadOutput
   const skipped = input.songs.length - songs.length;
   log.info(`${input.songs.length} total songs, ${songs.length} with YouTube URLs, ${skipped} skipped (no URL)`);
 
+  // Build reverse map: songId → playlist names
+  const playlists: Playlist[] = input.playlists ?? [];
+  const songPlaylistMap = new Map<string, string[]>();
+  for (const pl of playlists) {
+    for (const songId of pl.songIds) {
+      const existing = songPlaylistMap.get(songId);
+      if (existing) {
+        existing.push(pl.name);
+      } else {
+        songPlaylistMap.set(songId, [pl.name]);
+      }
+    }
+  }
+
+  // Pre-create playlist subdirectories
+  const playlistDirs = new Set<string>();
+  for (const song of songs) {
+    const plNames = songPlaylistMap.get(song.id);
+    if (plNames && plNames.length > 0) {
+      for (const name of plNames) playlistDirs.add(name);
+    } else {
+      playlistDirs.add("Uncategorized");
+    }
+  }
+  for (const dir of playlistDirs) {
+    await Bun.$`mkdir -p ${path.join(opts.outputDir, sanitizeDirName(dir))}`.quiet();
+  }
+
   const total = songs.length;
   const results: DownloadResult[] = [];
   let downloaded = 0, alreadyExists = 0, errors = 0;
   const startedAt = new Date().toISOString();
 
   for (let i = 0; i < songs.length; i++) {
-    const song = songs[i];
+    const song = songs[i]!;
     log.step(i + 1, total, `${song.artist} - ${song.title}`);
 
+    // Determine playlist folder(s) for this song
+    const plNames = songPlaylistMap.get(song.id);
+    const primaryFolder = plNames && plNames.length > 0
+      ? sanitizeDirName(plNames[0]!)
+      : "Uncategorized";
+    const songOutputDir = path.join(opts.outputDir, primaryFolder);
+
     const result = await downloadMp3(song, {
-      outputDir: opts.outputDir,
+      outputDir: songOutputDir,
       audioQuality: opts.audioQuality ?? "0",
       embedThumbnail: opts.embedThumbnail ?? false,
     });
@@ -72,7 +108,21 @@ export async function runDownload(opts: DownloadOptions): Promise<DownloadOutput
 
     if (result.downloadStatus === "downloaded") {
       downloaded++;
-      log.success(`Downloaded: ${path.basename(result.filePath ?? "")}`);
+      log.success(`Downloaded: ${primaryFolder}/${path.basename(result.filePath ?? "")}`);
+
+      // Copy to additional playlist folders
+      if (plNames && plNames.length > 1 && result.filePath) {
+        for (let j = 1; j < plNames.length; j++) {
+          const extraDir = path.join(opts.outputDir, sanitizeDirName(plNames[j]!));
+          const destPath = path.join(extraDir, path.basename(result.filePath));
+          try {
+            await copyFile(result.filePath, destPath);
+            log.info(`Copied to ${sanitizeDirName(plNames[j]!)}/${path.basename(result.filePath)}`);
+          } catch (err) {
+            log.warn(`Failed to copy to ${destPath}: ${err}`);
+          }
+        }
+      }
     } else if (result.downloadStatus === "already_exists") {
       alreadyExists++;
     } else if (result.downloadStatus === "error") {
@@ -138,4 +188,12 @@ async function saveStatus(
   };
   await Bun.write(statusFile, JSON.stringify(output, null, 2));
   return output;
+}
+
+function sanitizeDirName(name: string): string {
+  return name
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 100);
 }

@@ -4,7 +4,7 @@
  * The exported XML is a plist with Tracks and Playlists dictionaries.
  */
 import { XMLParser } from "fast-xml-parser";
-import type { Song } from "./types";
+import type { Song, Playlist } from "./types";
 import { log } from "./logger";
 
 interface PlistDict {
@@ -14,25 +14,28 @@ interface PlistDict {
 export async function parseItunesLibraryXml(
   filePath: string,
   playlistFilter?: string
-): Promise<Song[]> {
+): Promise<{ songs: Song[]; playlists: Playlist[] }> {
   log.info(`Parsing iTunes Library XML: ${filePath}`);
 
   const raw = await Bun.file(filePath).text();
 
   const parser = new XMLParser({
-    ignoreAttributes: false,
-    parseAttributeValue: true,
+    ignoreAttributes: true,
     parseTagValue: true,
-    // The plist format alternates <key> and value tags inside <dict>
-    // We need to handle this specially
+    preserveOrder: true,
   });
 
   const parsed = parser.parse(raw);
-  const plist = parsed?.plist?.dict;
-  if (!plist) throw new Error("Unexpected XML structure — is this an iTunes Library export?");
+
+  // With preserveOrder, the structure is an array of ordered elements.
+  // Find <plist> → <dict> inside it.
+  const plistNode = findTag(parsed, "plist");
+  if (!plistNode) throw new Error("Unexpected XML structure — is this an iTunes Library export?");
+  const topDictNode = findTag(plistNode, "dict");
+  if (!topDictNode) throw new Error("Unexpected XML structure — is this an iTunes Library export?");
 
   // Build a flat map of the top-level plist dict
-  const root = parsePlistDict(plist);
+  const root = parsePlistDict(topDictNode);
 
   // Extract tracks
   const tracksRaw = root["Tracks"] as PlistDict | undefined;
@@ -60,99 +63,122 @@ export async function parseItunesLibraryXml(
 
   log.info(`Found ${trackMap.size} audio tracks in library`);
 
-  // If a playlist filter is specified, filter by playlist name or id
-  if (playlistFilter) {
-    const playlistsRaw = root["Playlists"];
-    if (!Array.isArray(playlistsRaw)) {
-      log.warn("No playlists found in library XML");
-      return [...trackMap.values()];
-    }
+  // Parse all playlists from the XML
+  const parsedPlaylists: Playlist[] = [];
+  const playlistsRaw = root["Playlists"];
+  if (Array.isArray(playlistsRaw)) {
+    for (const p of playlistsRaw as PlistDict[]) {
+      // Skip Apple-internal playlists
+      if (p["Master"] || p["Distinguished Kind"]) continue;
 
-    const playlists = playlistsRaw as PlistDict[];
-    const matched = playlists.find(
+      const name = String(p["Name"] ?? "");
+      const id = String(p["Playlist ID"] ?? "");
+      const items = p["Playlist Items"];
+      if (!Array.isArray(items)) continue;
+
+      const songIds = (items as PlistDict[])
+        .map((item) => String(item["Track ID"]))
+        .filter((tid) => trackMap.has(tid));
+
+      if (songIds.length > 0) {
+        parsedPlaylists.push({ id, name, songIds });
+      }
+    }
+  }
+
+  log.info(`Found ${parsedPlaylists.length} playlists in library`);
+
+  // If a playlist filter is specified, filter songs to that playlist only
+  if (playlistFilter) {
+    const matched = parsedPlaylists.find(
       (p) =>
-        String(p["Name"]).toLowerCase() === playlistFilter.toLowerCase() ||
-        String(p["Playlist ID"]) === playlistFilter
+        p.name.toLowerCase() === playlistFilter.toLowerCase() ||
+        p.id === playlistFilter
     );
 
     if (!matched) {
-      const names = playlists.map((p) => `"${p["Name"]}"`).join(", ");
+      const names = parsedPlaylists.map((p) => `"${p.name}"`).join(", ");
       throw new Error(`Playlist "${playlistFilter}" not found. Available: ${names}`);
     }
 
-    const playlistName = String(matched["Name"]);
-    log.info(`Using playlist: "${playlistName}"`);
-
-    const items = matched["Playlist Items"];
-    if (!Array.isArray(items)) return [];
+    log.info(`Using playlist: "${matched.name}"`);
 
     const songs: Song[] = [];
-    for (const item of items as PlistDict[]) {
-      const id = String(item["Track ID"]);
-      const song = trackMap.get(id);
-      if (song) songs.push({ ...song, playlistId: String(matched["Playlist ID"]), playlistName });
+    for (const songId of matched.songIds) {
+      const song = trackMap.get(songId);
+      if (song) songs.push({ ...song, playlistId: matched.id, playlistName: matched.name });
     }
-    return songs;
+    return { songs, playlists: parsedPlaylists };
   }
 
-  return [...trackMap.values()];
+  return { songs: [...trackMap.values()], playlists: parsedPlaylists };
 }
 
 /**
- * Convert fast-xml-parser's plist output (alternating <key>/<value> children)
- * into a plain JS object.
+ * With preserveOrder: true, each element is an object like:
+ *   { tagName: [ ...children ] } or { tagName: [{ "#text": value }] }
+ * A <dict> is an array of alternating <key> and value elements.
  */
-function parsePlistDict(dict: unknown): PlistDict {
-  if (typeof dict !== "object" || dict === null) return {};
-
-  const obj = dict as Record<string, unknown>;
+function parsePlistDict(children: unknown[]): PlistDict {
+  if (!Array.isArray(children)) return {};
   const result: PlistDict = {};
 
-  // fast-xml-parser returns alternating key-value arrays or objects
-  // The structure for a plist dict looks like:
-  // { key: ["Major Version", "Tracks", ...], integer: [1, ...], dict: {...}, ... }
-  const keys: string[] = toArray(obj["key"]).map(String);
+  let currentKey: string | null = null;
+  for (const node of children) {
+    if (typeof node !== "object" || node === null) continue;
+    const entry = node as Record<string, unknown>;
 
-  // Collect all value nodes in document order — this is tricky with fast-xml-parser
-  // because it groups by tag name. We'll reconstruct order using index mapping.
-  const valueNodes: { tag: string; value: unknown }[] = [];
-
-  for (const [tag, vals] of Object.entries(obj)) {
-    if (tag === "key") continue;
-    const arr = toArray(vals);
-    for (let i = 0; i < arr.length; i++) {
-      valueNodes.push({ tag, value: arr[i] });
+    if ("key" in entry) {
+      // <key>SomeKey</key> → entry.key = [{ "#text": "SomeKey" }]
+      const keyChildren = entry.key as { "#text"?: string | number }[];
+      currentKey = String(keyChildren?.[0]?.["#text"] ?? "");
+      continue;
     }
-  }
 
-  // In a plist dict, keys and values alternate. With fast-xml-parser grouping by
-  // tag name, we can't perfectly reconstruct order without attribute tracking.
-  // Instead, we pair keys[i] with valueNodes[i] in order of appearance.
-  for (let i = 0; i < keys.length; i++) {
-    const node = valueNodes[i];
-    if (!node) break;
-    const k = keys[i];
+    if (currentKey === null) continue;
 
-    if (node.tag === "dict") {
-      result[k] = parsePlistDict(node.value);
-    } else if (node.tag === "array") {
-      result[k] = parsePlistArray(node.value);
+    const k = currentKey;
+    currentKey = null;
+
+    if ("dict" in entry) {
+      result[k] = parsePlistDict(entry.dict as unknown[]);
+    } else if ("array" in entry) {
+      result[k] = parsePlistArray(entry.array as unknown[]);
+    } else if ("true" in entry) {
+      result[k] = true;
+    } else if ("false" in entry) {
+      result[k] = false;
     } else {
-      result[k] = node.value as string | number | boolean;
+      // <string>, <integer>, <real>, <date>, etc.
+      const tag = Object.keys(entry)[0]!;
+      const tagChildren = entry[tag] as { "#text"?: string | number }[];
+      result[k] = tagChildren?.[0]?.["#text"] ?? "";
     }
   }
 
   return result;
 }
 
-function parsePlistArray(arr: unknown): PlistDict[] {
-  if (!arr || typeof arr !== "object") return [];
-  const obj = arr as Record<string, unknown>;
-  const dicts = toArray(obj["dict"]);
-  return dicts.map((d) => parsePlistDict(d));
+function parsePlistArray(children: unknown[]): PlistDict[] {
+  if (!Array.isArray(children)) return [];
+  const results: PlistDict[] = [];
+  for (const node of children) {
+    if (typeof node !== "object" || node === null) continue;
+    const entry = node as Record<string, unknown>;
+    if ("dict" in entry) {
+      results.push(parsePlistDict(entry.dict as unknown[]));
+    }
+  }
+  return results;
 }
 
-function toArray<T>(val: T | T[] | undefined): T[] {
-  if (val === undefined || val === null) return [];
-  return Array.isArray(val) ? val : [val];
+/** Find a tag in a preserveOrder array and return its children. */
+function findTag(arr: unknown, tagName: string): unknown[] | null {
+  if (!Array.isArray(arr)) return null;
+  for (const node of arr) {
+    if (typeof node === "object" && node !== null && tagName in (node as Record<string, unknown>)) {
+      return (node as Record<string, unknown>)[tagName] as unknown[];
+    }
+  }
+  return null;
 }

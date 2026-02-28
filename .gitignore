@@ -38,3 +38,6 @@ output/
 downloads/
 *.mp3
 *.m4a
+
+
+*.xml

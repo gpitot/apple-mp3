@@ -80,7 +80,6 @@ export async function downloadMp3(
   const proc = Bun.spawn(args, {
     stdout: "pipe",
     stderr: "pipe",
-    cwd: opts.outputDir,
   });
 
   const [code, stderr] = await Promise.all([

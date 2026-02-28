@@ -9,7 +9,7 @@
  * Output: output/songs.json
  */
 import { log } from "../lib/logger";
-import type { FetchOutput, Song } from "../lib/types";
+import type { FetchOutput, Song, Playlist } from "../lib/types";
 import { fetchAllLibrarySongs, fetchPlaylistSongs, fetchAllPlaylists } from "../lib/apple-music";
 import { parseItunesLibraryXml } from "../lib/xml-parser";
 import path from "node:path";
@@ -27,11 +27,12 @@ export async function runFetch(opts: FetchOptions): Promise<FetchOutput> {
 
   let songs: Song[];
   let source: string;
+  let playlists: Playlist[] | undefined;
 
   if (opts.fromJson) {
     ({ songs, source } = await fetchFromJson(opts.fromJson));
   } else if (opts.fromXml) {
-    ({ songs, source } = await fetchFromXml(opts.fromXml, opts.playlistFilter));
+    ({ songs, source, playlists } = await fetchFromXml(opts.fromXml, opts.playlistFilter));
   } else {
     ({ songs, source } = await fetchFromApi(opts));
   }
@@ -42,6 +43,7 @@ export async function runFetch(opts: FetchOptions): Promise<FetchOutput> {
     playlistFilter: opts.playlistFilter,
     totalSongs: songs.length,
     songs,
+    playlists,
   };
 
   await Bun.write(opts.outputFile, JSON.stringify(output, null, 2));
@@ -94,9 +96,9 @@ async function fetchFromApi(
 async function fetchFromXml(
   xmlPath: string,
   playlistFilter?: string
-): Promise<{ songs: Song[]; source: string }> {
-  const songs = await parseItunesLibraryXml(xmlPath, playlistFilter);
-  return { songs, source: `itunes-xml:${path.basename(xmlPath)}` };
+): Promise<{ songs: Song[]; source: string; playlists: Playlist[] }> {
+  const { songs, playlists } = await parseItunesLibraryXml(xmlPath, playlistFilter);
+  return { songs, playlists, source: `itunes-xml:${path.basename(xmlPath)}` };
 }
 
 async function fetchFromJson(

@@ -46,7 +46,7 @@ async function apiFetch<T>(
     const body = await res.text().catch(() => "");
     throw new Error(`Apple Music API ${res.status}: ${body.slice(0, 200)}`);
   }
-  return res.json();
+  return res.json() as Promise<ApiResponse<T>>;
 }
 
 async function fetchAllPages<T>(
@@ -58,7 +58,7 @@ async function fetchAllPages<T>(
   let next: string | null = `${path}${path.includes("?") ? "&" : "?"}limit=100`;
 
   while (next) {
-    const page = await apiFetch<T>(next, devToken, userToken);
+    const page: ApiResponse<T> = await apiFetch<T>(next, devToken, userToken);
     items.push(...page.data);
     next = page.next ? `https://api.music.apple.com${page.next}` : null;
     if (page.next) {
