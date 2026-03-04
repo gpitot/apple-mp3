@@ -19,6 +19,7 @@ import { downloadMp3, checkYtDlp } from "../lib/downloader";
 import { sleep } from "../lib/youtube";
 import { copyFile } from "node:fs/promises";
 import path from "node:path";
+import pLimit from "p-limit";
 
 export interface DownloadOptions {
   inputFile: string;
@@ -29,6 +30,7 @@ export interface DownloadOptions {
   limitTo?: number;
   onlyPlaylist?: string;
   delayMs?: number;
+  concurrency?: number;
 }
 
 export async function runDownload(
@@ -53,6 +55,17 @@ export async function runDownload(
   const input: SearchOutput = JSON.parse(inputRaw);
 
   let songs = input.songs.filter((s) => s.searchStatus === "found");
+
+  // Skip songs over 6 minutes (likely extended mixes or live recordings)
+  const MAX_DURATION_SEC = 360;
+  const beforeDurationFilter = songs.length;
+  songs = songs.filter(
+    (s) => !s.youtubeDurationSec || s.youtubeDurationSec <= MAX_DURATION_SEC,
+  );
+  const durationSkipped = beforeDurationFilter - songs.length;
+  if (durationSkipped > 0) {
+    log.info(`Skipped ${durationSkipped} songs over ${MAX_DURATION_SEC / 60} minutes`);
+  }
 
   if (opts.onlyPlaylist) {
     const before = songs.length;
@@ -109,80 +122,93 @@ export async function runDownload(
     alreadyExists = 0,
     errors = 0;
   const startedAt = new Date().toISOString();
+  let completed = 0;
 
-  for (let i = 0; i < songs.length; i++) {
-    const song = songs[i]!;
-    log.step(i + 1, total, `${song.artist} - ${song.title}`);
+  const concurrency = opts.concurrency ?? 1;
+  const limit = pLimit(concurrency);
 
-    // Determine playlist folder(s) for this song
-    const plNames = songPlaylistMap.get(song.id);
-    const primaryFolder =
-      plNames && plNames.length > 0
-        ? sanitizeDirName(plNames[0]!)
-        : "Uncategorized";
-    const songOutputDir = path.join(opts.outputDir, primaryFolder);
+  if (concurrency > 1) {
+    log.info(`Downloading with concurrency: ${concurrency}`);
+  }
 
-    const result = await downloadMp3(song, {
-      outputDir: songOutputDir,
-      audioQuality: opts.audioQuality ?? "0",
-      embedThumbnail: opts.embedThumbnail ?? false,
-    });
+  const tasks = songs.map((song, i) =>
+    limit(async () => {
+      log.step(i + 1, total, `${song.artist} - ${song.title}`);
 
-    results.push(result);
+      // Determine playlist folder(s) for this song
+      const plNames = songPlaylistMap.get(song.id);
+      const primaryFolder =
+        plNames && plNames.length > 0
+          ? sanitizeDirName(plNames[0]!)
+          : "Uncategorized";
+      const songOutputDir = path.join(opts.outputDir, primaryFolder);
 
-    if (result.downloadStatus === "downloaded") {
-      downloaded++;
-      log.success(
-        `Downloaded: ${primaryFolder}/${path.basename(result.filePath ?? "")}`,
-      );
+      const result = await downloadMp3(song, {
+        outputDir: songOutputDir,
+        audioQuality: opts.audioQuality ?? "0",
+        embedThumbnail: opts.embedThumbnail ?? false,
+      });
 
-      // Copy to additional playlist folders
-      if (plNames && plNames.length > 1 && result.filePath) {
-        for (let j = 1; j < plNames.length; j++) {
-          const extraDir = path.join(
-            opts.outputDir,
-            sanitizeDirName(plNames[j]!),
-          );
-          const destPath = path.join(extraDir, path.basename(result.filePath));
-          try {
-            await copyFile(result.filePath, destPath);
-            log.info(
-              `Copied to ${sanitizeDirName(plNames[j]!)}/${path.basename(result.filePath)}`,
+      results.push(result);
+
+      if (result.downloadStatus === "downloaded") {
+        downloaded++;
+        log.success(
+          `Downloaded: ${primaryFolder}/${path.basename(result.filePath ?? "")}`,
+        );
+
+        // Copy to additional playlist folders
+        if (plNames && plNames.length > 1 && result.filePath) {
+          for (let j = 1; j < plNames.length; j++) {
+            const extraDir = path.join(
+              opts.outputDir,
+              sanitizeDirName(plNames[j]!),
             );
-          } catch (err) {
-            log.warn(`Failed to copy to ${destPath}: ${err}`);
+            const destPath = path.join(extraDir, path.basename(result.filePath));
+            try {
+              await copyFile(result.filePath, destPath);
+              log.info(
+                `Copied to ${sanitizeDirName(plNames[j]!)}/${path.basename(result.filePath)}`,
+              );
+            } catch (err) {
+              log.warn(`Failed to copy to ${destPath}: ${err}`);
+            }
           }
         }
+      } else if (result.downloadStatus === "already_exists") {
+        alreadyExists++;
+      } else if (result.downloadStatus === "error") {
+        errors++;
+        log.error(
+          `Failed: ${song.artist} - ${song.title}: ${result.downloadError?.slice(0, 100)}`,
+        );
       }
-    } else if (result.downloadStatus === "already_exists") {
-      alreadyExists++;
-    } else if (result.downloadStatus === "error") {
-      errors++;
-      log.error(
-        `Failed: ${song.artist} - ${song.title}: ${result.downloadError?.slice(0, 100)}`,
-      );
-    }
 
-    // Save progress every 5 songs
-    if ((i + 1) % 5 === 0 || i === songs.length - 1) {
-      await saveStatus(
-        opts.statusFile,
-        results,
-        startedAt,
-        opts.outputDir,
-        total,
-        downloaded,
-        alreadyExists,
-        skipped,
-        errors,
-      );
-    }
+      completed++;
 
-    // Rate limiting delay (skip for cached songs and last song)
-    if (i < songs.length - 1 && result.downloadStatus === "downloaded") {
-      await sleep(opts.delayMs ?? 1000);
-    }
-  }
+      // Save progress every 5 songs
+      if (completed % 5 === 0 || completed === songs.length) {
+        await saveStatus(
+          opts.statusFile,
+          results,
+          startedAt,
+          opts.outputDir,
+          total,
+          downloaded,
+          alreadyExists,
+          skipped,
+          errors,
+        );
+      }
+
+      // Rate limiting delay (skip for cached songs)
+      if (result.downloadStatus === "downloaded") {
+        await sleep(opts.delayMs ?? 1000);
+      }
+    }),
+  );
+
+  await Promise.all(tasks);
 
   const output = await saveStatus(
     opts.statusFile,

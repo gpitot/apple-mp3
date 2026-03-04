@@ -65,6 +65,7 @@ DOWNLOAD OPTIONS
   --embed-thumbnail      Embed YouTube thumbnail as album art
   --delay <ms>           Delay between downloads in ms (default: 1000)
   --limit <n>            Only download first N songs
+  --concurrency <n>      Number of parallel downloads (default: 1)
   --playlist <name>      Only download songs from this playlist
 
 ALL OPTIONS
@@ -115,6 +116,7 @@ async function main() {
       delay: { type: "string" },
       limit: { type: "string" },
       quality: { type: "string" },
+      concurrency: { type: "string" },
       "embed-thumbnail": { type: "boolean" },
       "no-resume": { type: "boolean" },
       help: { type: "boolean", short: "h" },
@@ -173,6 +175,7 @@ async function main() {
           limitTo: values.limit ? parseInt(String(values.limit)) : undefined,
           onlyPlaylist: values.playlist ? String(values.playlist) : undefined,
           delayMs: values.delay ? parseInt(String(values.delay)) : undefined,
+          concurrency: values.concurrency ? parseInt(String(values.concurrency)) : undefined,
         });
         break;
 
@@ -200,6 +203,7 @@ async function main() {
           embedThumbnail: values["embed-thumbnail"] === true ? true : undefined,
           onlyPlaylist: values.playlist ? String(values.playlist) : undefined,
           delayMs: values.delay ? parseInt(String(values.delay)) : undefined,
+          concurrency: values.concurrency ? parseInt(String(values.concurrency)) : undefined,
         });
         break;
 
