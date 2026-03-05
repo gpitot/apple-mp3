@@ -6,7 +6,6 @@
  */
 import path from "node:path";
 import os from "node:os";
-import { ensureYtDlp } from "./lib/yt-dlp-manager";
 import { runFetch } from "./steps/fetch";
 import { runSearch } from "./steps/search";
 import { runDownload } from "./steps/download";
@@ -49,7 +48,9 @@ const sseClients = new Set<ReadableStreamDefaultController<string>>();
 const _origLog = console.log.bind(console);
 console.log = (...args: any[]) => {
   _origLog(...args);
-  const line = args.map((a) => (typeof a === "string" ? a : String(a))).join(" ");
+  const line = args
+    .map((a) => (typeof a === "string" ? a : String(a)))
+    .join(" ");
   // Strip ANSI escape codes for the browser
   const clean = line.replace(/\x1b\[[0-9;]*m/g, "");
   for (const ctrl of sseClients) {
@@ -60,32 +61,6 @@ console.log = (...args: any[]) => {
     }
   }
 };
-
-// ── yt-dlp setup ──────────────────────────────────────────────────────────────
-
-let ytDlpReady = false;
-let ytDlpVersion: string | undefined;
-let ytDlpLog = "setting up…";
-
-async function setupYtDlp() {
-  try {
-    await ensureYtDlp((msg) => {
-      ytDlpLog = msg;
-      console.log(`[yt-dlp] ${msg}`);
-    });
-    // Get version
-    const { getYtDlpPath } = await import("./lib/yt-dlp-manager");
-    const proc = Bun.spawn([getYtDlpPath(), "--version"], { stdout: "pipe", stderr: "pipe" });
-    await proc.exited;
-    ytDlpVersion = (await new Response(proc.stdout).text()).trim();
-    ytDlpReady = true;
-    ytDlpLog = "ready";
-    console.log(`[yt-dlp] Ready — version ${ytDlpVersion}`);
-  } catch (err: any) {
-    ytDlpLog = `Error: ${err.message}`;
-    console.log(`[yt-dlp] Setup failed: ${err.message}`);
-  }
-}
 
 // ── Status ─────────────────────────────────────────────────────────────────────
 
@@ -112,7 +87,11 @@ async function getStatus() {
     downloadedCount = data.downloadedCount;
   }
 
-  return { ytDlpReady, ytDlpVersion, ytDlpLog, songCount, foundCount, downloadedCount };
+  return {
+    songCount,
+    foundCount,
+    downloadedCount,
+  };
 }
 
 // ── Server ─────────────────────────────────────────────────────────────────────
@@ -239,22 +218,24 @@ const server = Bun.serve({
     },
   },
 
-  development: process.env.NODE_ENV !== "production" ? { hmr: true, console: true } : undefined,
+  development:
+    process.env.NODE_ENV !== "production"
+      ? { hmr: true, console: true }
+      : undefined,
 });
 
 console.log(`[apple-mp3] Server running at http://localhost:${PORT}`);
 
 // Open browser
-const url = `http://localhost:${PORT}`;
-if (process.platform === "darwin") {
-  Bun.$`open ${url}`.quiet().catch(() => {});
-} else if (process.platform === "win32") {
-  Bun.$`start ${url}`.quiet().catch(() => {});
-} else {
-  Bun.$`xdg-open ${url}`.quiet().catch(() => {});
+if (process.env.NODE_ENV === "production") {
+  const url = `http://localhost:${PORT}`;
+  if (process.platform === "darwin") {
+    Bun.$`open ${url}`.quiet().catch(() => {});
+  } else if (process.platform === "win32") {
+    Bun.$`start ${url}`.quiet().catch(() => {});
+  } else {
+    Bun.$`xdg-open ${url}`.quiet().catch(() => {});
+  }
 }
-
-// Download/update yt-dlp in background
-setupYtDlp();
 
 export default server;

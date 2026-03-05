@@ -1,17 +1,15 @@
 import type { SongWithUrl, DownloadResult } from "./types";
 import { log } from "./logger";
-import { getYtDlpPath } from "./yt-dlp-manager";
 import path from "node:path";
 
 export async function checkYtDlp(): Promise<void> {
-  const ytDlpBin = getYtDlpPath();
-  const proc = Bun.spawn([ytDlpBin, "--version"], {
+  const proc = Bun.spawn(["yt-dlp", "--version"], {
     stdout: "pipe",
     stderr: "pipe",
   });
   const code = await proc.exited;
   if (code !== 0) {
-    throw new Error(`yt-dlp check failed. Binary path: ${ytDlpBin}`);
+    throw new Error(`yt-dlp check failed. Binary path: `);
   }
   const version = await new Response(proc.stdout).text();
   log.info(`yt-dlp version: ${version.trim()}`);
@@ -26,20 +24,27 @@ export interface DownloadOptions {
 
 export async function downloadMp3(
   song: SongWithUrl,
-  opts: DownloadOptions
+  opts: DownloadOptions,
 ): Promise<DownloadResult> {
   if (!song.youtubeUrl) {
     return {
       ...song,
       downloadStatus: "skipped",
-      downloadError: "No YouTube URL (search status: " + song.searchStatus + ")",
+      downloadError:
+        "No YouTube URL (search status: " + song.searchStatus + ")",
     };
   }
 
   const safeArtist = sanitizeFilename(song.artist);
   const safeTitle = sanitizeFilename(song.title);
-  const filenameTemplate = path.join(opts.outputDir, `${safeArtist} - ${safeTitle}.%(ext)s`);
-  const expectedPath = path.join(opts.outputDir, `${safeArtist} - ${safeTitle}.mp3`);
+  const filenameTemplate = path.join(
+    opts.outputDir,
+    `${safeArtist} - ${safeTitle}.%(ext)s`,
+  );
+  const expectedPath = path.join(
+    opts.outputDir,
+    `${safeArtist} - ${safeTitle}.mp3`,
+  );
 
   // Check if already downloaded
   const existing = Bun.file(expectedPath);
@@ -52,12 +57,16 @@ export async function downloadMp3(
   }
 
   const args = [
-    getYtDlpPath(),
-    "-f", "bestaudio",
+    "yt-dlp",
+    "-f",
+    "bestaudio",
     "--extract-audio",
-    "--audio-format", "mp3",
-    "--audio-quality", opts.audioQuality ?? "0",
-    "--output", filenameTemplate,
+    "--audio-format",
+    "mp3",
+    "--audio-quality",
+    opts.audioQuality ?? "0",
+    "--output",
+    filenameTemplate,
     "--no-playlist",
     "--quiet",
     "--progress",

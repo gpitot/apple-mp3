@@ -8,9 +8,6 @@ interface Config {
 }
 
 interface Status {
-  ytDlpReady: boolean;
-  ytDlpVersion?: string;
-  ytDlpLog?: string;
   fetchFile?: string;
   searchFile?: string;
   downloadFile?: string;
@@ -70,7 +67,7 @@ const css = `
 function App() {
   const [tab, setTab] = useState<"setup" | "library" | "download">("setup");
   const [config, setConfig] = useState<Config>({});
-  const [status, setStatus] = useState<Status>({ ytDlpReady: false });
+  const [status, setStatus] = useState<Status>({});
   const [logs, setLogs] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
   const [running, setRunning] = useState<string | null>(null);
@@ -151,7 +148,10 @@ function App() {
     if (!file) return;
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch("/api/upload-xml", { method: "POST", body: formData });
+    const res = await fetch("/api/upload-xml", {
+      method: "POST",
+      body: formData,
+    });
     const { path: xmlPath } = await res.json();
     await runJob("/api/fetch", { fromXml: xmlPath });
     setTab("library");
@@ -162,7 +162,10 @@ function App() {
     if (!file) return;
     const formData = new FormData();
     formData.append("file", file);
-    const res = await fetch("/api/upload-csv", { method: "POST", body: formData });
+    const res = await fetch("/api/upload-csv", {
+      method: "POST",
+      body: formData,
+    });
     const { path: csvPath } = await res.json();
     await runJob("/api/fetch", { fromCsv: csvPath });
     setTab("library");
@@ -182,19 +185,13 @@ function App() {
         <h1>apple-mp3</h1>
         <p className="subtitle">Download your Apple Music library as MP3s</p>
 
-        {/* yt-dlp status badge */}
-        <p className="hint">
-          yt-dlp:{" "}
-          {status.ytDlpReady ? (
-            <span className="badge badge-green">ready {status.ytDlpVersion ? `(${status.ytDlpVersion})` : ""}</span>
-          ) : (
-            <span className="badge badge-yellow">{status.ytDlpLog ?? "setting up…"}</span>
-          )}
-        </p>
-
         <div className="tabs">
           {(["setup", "library", "download"] as const).map((t) => (
-            <button key={t} className={`tab${tab === t ? " active" : ""}`} onClick={() => setTab(t)}>
+            <button
+              key={t}
+              className={`tab${tab === t ? " active" : ""}`}
+              onClick={() => setTab(t)}
+            >
               {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
           ))}
@@ -206,16 +203,30 @@ function App() {
             <div className="card">
               <p className="section-title">Import Library</p>
               <p className="hint">
-                Export your iTunes/Music library XML from <strong>File → Library → Export Library…</strong> and upload it here.
+                Export your iTunes/Music library XML from{" "}
+                <strong>File → Library → Export Library…</strong> and upload it
+                here.
               </p>
               <div className="flex-gap">
                 <label className="file-upload-label">
                   Upload iTunes XML
-                  <input ref={xmlFileRef} type="file" accept=".xml" style={{ display: "none" }} onChange={handleXmlUpload} />
+                  <input
+                    ref={xmlFileRef}
+                    type="file"
+                    accept=".xml"
+                    style={{ display: "none" }}
+                    onChange={handleXmlUpload}
+                  />
                 </label>
                 <label className="file-upload-label">
                   Upload CSV
-                  <input ref={csvFileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleCsvUpload} />
+                  <input
+                    ref={csvFileRef}
+                    type="file"
+                    accept=".csv"
+                    style={{ display: "none" }}
+                    onChange={handleCsvUpload}
+                  />
                 </label>
               </div>
             </div>
@@ -227,7 +238,9 @@ function App() {
                 type="text"
                 placeholder="~/Downloads/apple-mp3"
                 value={config.outputDir ?? ""}
-                onChange={(e) => setConfig({ ...config, outputDir: e.target.value })}
+                onChange={(e) =>
+                  setConfig({ ...config, outputDir: e.target.value })
+                }
               />
             </div>
 
@@ -268,7 +281,9 @@ function App() {
             {logs.length > 0 && (
               <div ref={logRef} className="log">
                 {logs.map((line, i) => (
-                  <div key={i} className={classForLog(line)}>{line}</div>
+                  <div key={i} className={classForLog(line)}>
+                    {line}
+                  </div>
                 ))}
               </div>
             )}
@@ -292,21 +307,19 @@ function App() {
             <div className="flex-gap spacer">
               <button
                 className="btn-primary"
-                disabled={!!running || !status.foundCount || !status.ytDlpReady}
+                disabled={!!running || !status.foundCount}
                 onClick={() => runJob("/api/download")}
               >
                 {running === "/api/download" ? "Downloading…" : "Download MP3s"}
               </button>
             </div>
 
-            {!status.ytDlpReady && (
-              <p className="hint" style={{ color: "#facc15" }}>Waiting for yt-dlp to finish setting up…</p>
-            )}
-
             {logs.length > 0 && (
               <div ref={logRef} className="log">
                 {logs.map((line, i) => (
-                  <div key={i} className={classForLog(line)}>{line}</div>
+                  <div key={i} className={classForLog(line)}>
+                    {line}
+                  </div>
                 ))}
               </div>
             )}

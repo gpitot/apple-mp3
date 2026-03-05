@@ -38,9 +38,6 @@ export async function runDownload(
 ): Promise<DownloadOutput> {
   log.header("Step 3: Download MP3s");
 
-  // Check yt-dlp is available
-  await checkYtDlp();
-
   // Ensure output dir exists
   await Bun.$`mkdir -p ${opts.outputDir}`.quiet();
 
@@ -64,7 +61,9 @@ export async function runDownload(
   );
   const durationSkipped = beforeDurationFilter - songs.length;
   if (durationSkipped > 0) {
-    log.info(`Skipped ${durationSkipped} songs over ${MAX_DURATION_SEC / 60} minutes`);
+    log.info(
+      `Skipped ${durationSkipped} songs over ${MAX_DURATION_SEC / 60} minutes`,
+    );
   }
 
   if (opts.onlyPlaylist) {
@@ -164,7 +163,10 @@ export async function runDownload(
               opts.outputDir,
               sanitizeDirName(plNames[j]!),
             );
-            const destPath = path.join(extraDir, path.basename(result.filePath));
+            const destPath = path.join(
+              extraDir,
+              path.basename(result.filePath),
+            );
             try {
               await copyFile(result.filePath, destPath);
               log.info(
