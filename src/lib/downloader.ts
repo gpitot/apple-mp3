@@ -1,21 +1,17 @@
 import type { SongWithUrl, DownloadResult } from "./types";
 import { log } from "./logger";
+import { getYtDlpPath } from "./yt-dlp-manager";
 import path from "node:path";
 
 export async function checkYtDlp(): Promise<void> {
-  const proc = Bun.spawn(["yt-dlp", "--version"], {
+  const ytDlpBin = getYtDlpPath();
+  const proc = Bun.spawn([ytDlpBin, "--version"], {
     stdout: "pipe",
     stderr: "pipe",
   });
   const code = await proc.exited;
   if (code !== 0) {
-    throw new Error(
-      "yt-dlp is not installed or not in PATH.\n" +
-        "Install it with:\n" +
-        "  pip install yt-dlp\n" +
-        "  or: brew install yt-dlp\n" +
-        "  or: https://github.com/yt-dlp/yt-dlp#installation"
-    );
+    throw new Error(`yt-dlp check failed. Binary path: ${ytDlpBin}`);
   }
   const version = await new Response(proc.stdout).text();
   log.info(`yt-dlp version: ${version.trim()}`);
@@ -56,7 +52,7 @@ export async function downloadMp3(
   }
 
   const args = [
-    "yt-dlp",
+    getYtDlpPath(),
     "-f", "bestaudio",
     "--extract-audio",
     "--audio-format", "mp3",
