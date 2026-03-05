@@ -45,6 +45,16 @@ async function saveConfig(cfg: Config): Promise<void> {
 // We intercept console.log to broadcast to connected SSE clients.
 const sseClients = new Set<ReadableStreamDefaultController<string>>();
 
+function broadcastSSE(payload: string) {
+  for (const ctrl of sseClients) {
+    try {
+      ctrl.enqueue(payload);
+    } catch {
+      sseClients.delete(ctrl);
+    }
+  }
+}
+
 const _origLog = console.log.bind(console);
 console.log = (...args: any[]) => {
   _origLog(...args);
@@ -53,14 +63,25 @@ console.log = (...args: any[]) => {
     .join(" ");
   // Strip ANSI escape codes for the browser
   const clean = line.replace(/\x1b\[[0-9;]*m/g, "");
-  for (const ctrl of sseClients) {
-    try {
-      ctrl.enqueue(`data: ${clean}\n\n`);
-    } catch {
-      sseClients.delete(ctrl);
-    }
-  }
+  broadcastSSE(`data: ${clean}\n\n`);
 };
+
+// ── Job tracking ──────────────────────────────────────────────────────────────
+
+let currentJob: { endpoint: string; status: "running" | "done" | "error"; error?: string } | null = null;
+
+function startJob(endpoint: string, work: () => Promise<unknown>) {
+  currentJob = { endpoint, status: "running" };
+  work()
+    .then(() => {
+      currentJob = { endpoint, status: "done" };
+      broadcastSSE(`event: job-done\ndata: ${JSON.stringify({ endpoint, ok: true })}\n\n`);
+    })
+    .catch((err: any) => {
+      currentJob = { endpoint, status: "error", error: err.message };
+      broadcastSSE(`event: job-done\ndata: ${JSON.stringify({ endpoint, ok: false, error: err.message })}\n\n`);
+    });
+}
 
 // ── Status ─────────────────────────────────────────────────────────────────────
 
@@ -132,6 +153,10 @@ const server = Bun.serve({
       GET: async () => Response.json(await getStatus()),
     },
 
+    "/api/job-status": {
+      GET: () => Response.json(currentJob),
+    },
+
     "/api/config": {
       GET: async () => Response.json(await loadConfig()),
       POST: async (req: Request) => {
@@ -166,53 +191,82 @@ const server = Bun.serve({
     // Fetch songs
     "/api/fetch": {
       POST: async (req: Request) => {
+        if (currentJob?.status === "running")
+          return Response.json({ error: "A job is already running" }, { status: 409 });
         const body: { fromXml?: string; fromCsv?: string } = await req.json();
-        try {
-          await runFetch({
+        startJob("/api/fetch", () =>
+          runFetch({
             outputFile: SONGS_FILE,
             fromXml: body.fromXml,
             fromCsv: body.fromCsv,
-            // If fromApi, tokens must be in env (set via saveConfig)
+          })
+        );
+        return Response.json({ ok: true });
+      },
+    },
+
+    // Get songs (for Library tab song list)
+    "/api/songs": {
+      GET: async () => {
+        const f = Bun.file(SONGS_FILE);
+        if (await f.exists()) {
+          return new Response(await f.text(), {
+            headers: { "Content-Type": "application/json" },
           });
-          return Response.json({ ok: true });
-        } catch (err: any) {
-          return Response.json({ error: err.message }, { status: 500 });
         }
+        return Response.json(null);
+      },
+    },
+
+    // Get songs with URLs (for Download tab song list)
+    "/api/songs-with-urls": {
+      GET: async () => {
+        const f = Bun.file(SONGS_WITH_URLS_FILE);
+        if (await f.exists()) {
+          return new Response(await f.text(), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return Response.json(null);
       },
     },
 
     // Search YouTube
     "/api/search": {
-      POST: async () => {
-        try {
-          await runSearch({
+      POST: async (req: Request) => {
+        if (currentJob?.status === "running")
+          return Response.json({ error: "A job is already running" }, { status: 409 });
+        const body: { songIds?: string[] } = await req.json().catch(() => ({}));
+        startJob("/api/search", () =>
+          runSearch({
             inputFile: SONGS_FILE,
             outputFile: SONGS_WITH_URLS_FILE,
-          });
-          return Response.json({ ok: true });
-        } catch (err: any) {
-          return Response.json({ error: err.message }, { status: 500 });
-        }
+            songIds: body.songIds,
+          })
+        );
+        return Response.json({ ok: true });
       },
     },
 
     // Download MP3s
     "/api/download": {
-      POST: async () => {
+      POST: async (req: Request) => {
+        if (currentJob?.status === "running")
+          return Response.json({ error: "A job is already running" }, { status: 409 });
+        const body: { songIds?: string[] } = await req.json().catch(() => ({}));
         const cfg = await loadConfig();
         const outputDir = cfg.outputDir
           ? cfg.outputDir.replace(/^~/, os.homedir())
           : path.join(os.homedir(), "Downloads", "apple-mp3");
-        try {
-          await runDownload({
+        startJob("/api/download", () =>
+          runDownload({
             inputFile: SONGS_WITH_URLS_FILE,
             statusFile: DOWNLOAD_STATUS_FILE,
             outputDir,
-          });
-          return Response.json({ ok: true });
-        } catch (err: any) {
-          return Response.json({ error: err.message }, { status: 500 });
-        }
+            songIds: body.songIds,
+          })
+        );
+        return Response.json({ ok: true });
       },
     },
   },

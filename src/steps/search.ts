@@ -8,31 +8,43 @@
  * Uses youtube-sr scraping to find videos.
  */
 import { log } from "../lib/logger";
-import type { FetchOutput, Playlist, SearchOutput, SongWithUrl } from "../lib/types";
+import type {
+  FetchOutput,
+  Playlist,
+  SearchOutput,
+  SongWithUrl,
+} from "../lib/types";
 import { searchYouTube, sleep } from "../lib/youtube";
 
 export interface SearchOptions {
   inputFile: string;
   outputFile: string;
-  delayMs?: number;   // Delay between searches (default: 800ms)
-  limitTo?: number;   // Only process first N songs (for testing)
-  resume?: boolean;   // Skip already-searched songs (default: true)
+  delayMs?: number; // Delay between searches (default: 800ms)
+  limitTo?: number; // Only process first N songs (for testing)
+  resume?: boolean; // Skip already-searched songs (default: true)
   playlistFilter?: string; // Only search songs from this playlist (name or ID)
+  songIds?: string[]; // Only search these specific song IDs
 }
 
 export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
   log.header("Step 2: Search YouTube for Songs");
 
-  const inputRaw = await Bun.file(opts.inputFile).text().catch(() => {
-    throw new Error(`Input file not found: ${opts.inputFile}\nRun 'fetch' step first.`);
-  });
+  const inputRaw = await Bun.file(opts.inputFile)
+    .text()
+    .catch(() => {
+      throw new Error(
+        `Input file not found: ${opts.inputFile}\nRun 'fetch' step first.`,
+      );
+    });
   const input: FetchOutput = JSON.parse(inputRaw);
   log.info(`Loaded ${input.totalSongs} songs from ${opts.inputFile}`);
 
   // Load existing output if resuming
   let existingSongs: Map<string, SongWithUrl> = new Map();
   if (opts.resume !== false) {
-    const existingRaw = await Bun.file(opts.outputFile).text().catch(() => "");
+    const existingRaw = await Bun.file(opts.outputFile)
+      .text()
+      .catch(() => "");
     if (existingRaw) {
       const existing: SearchOutput = JSON.parse(existingRaw);
       for (const s of existing.songs) {
@@ -45,6 +57,13 @@ export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
   }
 
   let filteredSongs = input.songs;
+
+  if (opts.songIds) {
+    const idSet = new Set(opts.songIds);
+    const before = filteredSongs.length;
+    filteredSongs = filteredSongs.filter((s) => idSet.has(s.id));
+    log.info(`Filtered to ${filteredSongs.length}/${before} selected songs`);
+  }
 
   if (opts.playlistFilter) {
     const before = filteredSongs.length;
@@ -59,11 +78,16 @@ export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
   }
 
   const delay = opts.delayMs ?? 800;
-  const songs = opts.limitTo ? filteredSongs.slice(0, opts.limitTo) : filteredSongs;
+  const songs = opts.limitTo
+    ? filteredSongs.slice(0, opts.limitTo)
+    : filteredSongs;
   const total = songs.length;
 
   const results: SongWithUrl[] = [];
-  let found = 0, notFound = 0, errors = 0, skipped = 0;
+  let found = 0,
+    notFound = 0,
+    errors = 0,
+    skipped = 0;
 
   for (let i = 0; i < songs.length; i++) {
     const song = songs[i]!;
@@ -87,17 +111,28 @@ export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
 
     if (result.searchStatus === "found") {
       found++;
+      log.success(`Found: ${result.youtubeTitle}`);
     } else if (result.searchStatus === "not_found") {
       notFound++;
       log.warn(`Not found: ${song.artist} - ${song.title}`);
     } else {
       errors++;
-      log.error(`Error for ${song.artist} - ${song.title}: ${result.searchError}`);
+      log.error(
+        `Error for ${song.artist} - ${song.title}: ${result.searchError}`,
+      );
     }
 
     // Save progress every 10 songs
     if ((i + 1) % 10 === 0) {
-      await saveOutput(opts.outputFile, results, total, found, notFound, errors, input.playlists);
+      await saveOutput(
+        opts.outputFile,
+        results,
+        total,
+        found,
+        notFound,
+        errors,
+        input.playlists,
+      );
     }
 
     // Rate limiting delay (skip for last song)
@@ -106,7 +141,15 @@ export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
     }
   }
 
-  const output = await saveOutput(opts.outputFile, results, total, found, notFound, errors, input.playlists);
+  const output = await saveOutput(
+    opts.outputFile,
+    results,
+    total,
+    found,
+    notFound,
+    errors,
+    input.playlists,
+  );
 
   log.summary([
     ["Total songs", total],
@@ -129,7 +172,7 @@ async function saveOutput(
   found: number,
   notFound: number,
   errors: number,
-  playlists?: Playlist[]
+  playlists?: Playlist[],
 ): Promise<SearchOutput> {
   const output: SearchOutput = {
     searchedAt: new Date().toISOString(),
