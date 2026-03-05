@@ -161,6 +161,7 @@ function SongList({
   const [collapsedPlaylists, setCollapsedPlaylists] = useState<Set<string>>(
     new Set(),
   );
+  const lastClickedId = useRef<string | null>(null);
 
   // Build a map of songId -> Song for quick lookup
   const songMap = useMemo(() => {
@@ -221,6 +222,17 @@ function SongList({
       .filter((g) => g.songIds.length > 0);
   }, [groups, lowerSearch, songMap]);
 
+  // Flat list of visible (non-collapsed, filtered) song IDs for shift-select range
+  const visibleSongIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const g of filteredGroups) {
+      if (!collapsedPlaylists.has(g.id)) {
+        for (const id of g.songIds) ids.push(id);
+      }
+    }
+    return ids;
+  }, [filteredGroups, collapsedPlaylists]);
+
   const totalSongs = songs.length;
   const selectedCount = selectedIds.size;
 
@@ -238,10 +250,25 @@ function SongList({
     onSelectionChange(next);
   };
 
-  const toggleSong = (id: string) => {
+  const toggleSong = (id: string, shiftKey: boolean) => {
     const next = new Set(selectedIds);
+    if (shiftKey && lastClickedId.current) {
+      const lastIdx = visibleSongIds.indexOf(lastClickedId.current);
+      const curIdx = visibleSongIds.indexOf(id);
+      if (lastIdx !== -1 && curIdx !== -1) {
+        const start = Math.min(lastIdx, curIdx);
+        const end = Math.max(lastIdx, curIdx);
+        for (let i = start; i <= end; i++) {
+          next.add(visibleSongIds[i]!);
+        }
+        onSelectionChange(next);
+        lastClickedId.current = id;
+        return;
+      }
+    }
     if (next.has(id)) next.delete(id);
     else next.add(id);
+    lastClickedId.current = id;
     onSelectionChange(next);
   };
 
@@ -318,7 +345,13 @@ function SongList({
                           <input
                             type="checkbox"
                             checked={selectedIds.has(id)}
-                            onChange={() => toggleSong(id)}
+                            onChange={(e) =>
+                              toggleSong(
+                                id,
+                                e.nativeEvent instanceof MouseEvent &&
+                                  e.nativeEvent.shiftKey,
+                              )
+                            }
                           />
                           <span className="song-text">
                             {s.artist} - {s.title}
@@ -352,7 +385,13 @@ function SongList({
                       <input
                         type="checkbox"
                         checked={selectedIds.has(id)}
-                        onChange={() => toggleSong(id)}
+                        onChange={(e) =>
+                          toggleSong(
+                            id,
+                            e.nativeEvent instanceof MouseEvent &&
+                              e.nativeEvent.shiftKey,
+                          )
+                        }
                       />
                       <span className="song-text">
                         {s.artist} - {s.title}
