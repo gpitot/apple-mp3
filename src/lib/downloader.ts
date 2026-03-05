@@ -9,13 +9,7 @@ export async function checkYtDlp(): Promise<void> {
   });
   const code = await proc.exited;
   if (code !== 0) {
-    throw new Error(
-      "yt-dlp is not installed or not in PATH.\n" +
-        "Install it with:\n" +
-        "  pip install yt-dlp\n" +
-        "  or: brew install yt-dlp\n" +
-        "  or: https://github.com/yt-dlp/yt-dlp#installation"
-    );
+    throw new Error(`yt-dlp check failed. Binary path: `);
   }
   const version = await new Response(proc.stdout).text();
   log.info(`yt-dlp version: ${version.trim()}`);
@@ -30,20 +24,27 @@ export interface DownloadOptions {
 
 export async function downloadMp3(
   song: SongWithUrl,
-  opts: DownloadOptions
+  opts: DownloadOptions,
 ): Promise<DownloadResult> {
   if (!song.youtubeUrl) {
     return {
       ...song,
       downloadStatus: "skipped",
-      downloadError: "No YouTube URL (search status: " + song.searchStatus + ")",
+      downloadError:
+        "No YouTube URL (search status: " + song.searchStatus + ")",
     };
   }
 
   const safeArtist = sanitizeFilename(song.artist);
   const safeTitle = sanitizeFilename(song.title);
-  const filenameTemplate = path.join(opts.outputDir, `${safeArtist} - ${safeTitle}.%(ext)s`);
-  const expectedPath = path.join(opts.outputDir, `${safeArtist} - ${safeTitle}.mp3`);
+  const filenameTemplate = path.join(
+    opts.outputDir,
+    `${safeArtist} - ${safeTitle}.%(ext)s`,
+  );
+  const expectedPath = path.join(
+    opts.outputDir,
+    `${safeArtist} - ${safeTitle}.mp3`,
+  );
 
   // Check if already downloaded
   const existing = Bun.file(expectedPath);
@@ -57,11 +58,15 @@ export async function downloadMp3(
 
   const args = [
     "yt-dlp",
-    "-f", "bestaudio",
+    "-f",
+    "bestaudio",
     "--extract-audio",
-    "--audio-format", "mp3",
-    "--audio-quality", opts.audioQuality ?? "0",
-    "--output", filenameTemplate,
+    "--audio-format",
+    "mp3",
+    "--audio-quality",
+    opts.audioQuality ?? "0",
+    "--output",
+    filenameTemplate,
     "--no-playlist",
     "--quiet",
     "--progress",

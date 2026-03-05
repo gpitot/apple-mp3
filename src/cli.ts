@@ -7,7 +7,6 @@
  *   search    - Step 2: Find YouTube URLs for each song
  *   download  - Step 3: Download MP3s via yt-dlp
  *   all       - Run all three steps in sequence
- *   playlists - List your Apple Music playlists (requires API credentials)
  *
  * Quick start:
  *   cp .env.example .env   # fill in your tokens
@@ -40,7 +39,6 @@ COMMANDS
   search      Step 2: Find YouTube URLs for each song
   download    Step 3: Download MP3s via yt-dlp
   all         Run all three steps in sequence
-  playlists   List Apple Music playlists
 
 FETCH OPTIONS
   --from-xml <file>      Import from iTunes Library XML export
@@ -70,11 +68,6 @@ DOWNLOAD OPTIONS
 
 ALL OPTIONS
   Combines fetch + search + download. Accepts all options from each step.
-
-ENVIRONMENT VARIABLES
-  APPLE_DEVELOPER_TOKEN    Apple Music API developer JWT token
-  APPLE_MUSIC_USER_TOKEN   Apple Music user token
-  YOUTUBE_API_KEY          YouTube Data API v3 key (optional, uses scraping if unset)
 
 EXAMPLES
   # Import from iTunes XML export
@@ -140,7 +133,9 @@ async function main() {
           outputFile: String(values.output ?? DEFAULTS.songsFile),
           playlistFilter: values.playlist ? String(values.playlist) : undefined,
           fromXml: values["from-xml"] ? String(values["from-xml"]) : undefined,
-          fromJson: values["from-json"] ? String(values["from-json"]) : undefined,
+          fromJson: values["from-json"]
+            ? String(values["from-json"])
+            : undefined,
           fromCsv: values["from-csv"] ? String(values["from-csv"]) : undefined,
         });
         break;
@@ -148,7 +143,6 @@ async function main() {
       case "playlists":
         await runFetch({
           outputFile: DEFAULTS.songsFile,
-          listPlaylists: true,
         });
         break;
 
@@ -175,7 +169,9 @@ async function main() {
           limitTo: values.limit ? parseInt(String(values.limit)) : undefined,
           onlyPlaylist: values.playlist ? String(values.playlist) : undefined,
           delayMs: values.delay ? parseInt(String(values.delay)) : undefined,
-          concurrency: values.concurrency ? parseInt(String(values.concurrency)) : undefined,
+          concurrency: values.concurrency
+            ? parseInt(String(values.concurrency))
+            : undefined,
         });
         break;
 
@@ -184,7 +180,9 @@ async function main() {
           outputFile: String(values.output ?? DEFAULTS.songsFile),
           playlistFilter: values.playlist ? String(values.playlist) : undefined,
           fromXml: values["from-xml"] ? String(values["from-xml"]) : undefined,
-          fromJson: values["from-json"] ? String(values["from-json"]) : undefined,
+          fromJson: values["from-json"]
+            ? String(values["from-json"])
+            : undefined,
           fromCsv: values["from-csv"] ? String(values["from-csv"]) : undefined,
         });
         await runSearch({
@@ -203,16 +201,22 @@ async function main() {
           embedThumbnail: values["embed-thumbnail"] === true ? true : undefined,
           onlyPlaylist: values.playlist ? String(values.playlist) : undefined,
           delayMs: values.delay ? parseInt(String(values.delay)) : undefined,
-          concurrency: values.concurrency ? parseInt(String(values.concurrency)) : undefined,
+          concurrency: values.concurrency
+            ? parseInt(String(values.concurrency))
+            : undefined,
         });
         break;
 
       default:
-        console.error(`Unknown command: "${command}"\nRun with --help for usage.`);
+        console.error(
+          `Unknown command: "${command}"\nRun with --help for usage.`,
+        );
         process.exit(1);
     }
   } catch (err) {
-    console.error(`\n\x1b[31mError:\x1b[0m ${err instanceof Error ? err.message : String(err)}`);
+    console.error(
+      `\n\x1b[31mError:\x1b[0m ${err instanceof Error ? err.message : String(err)}`,
+    );
     process.exit(1);
   }
 }

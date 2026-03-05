@@ -7,21 +7,12 @@ export function buildSearchQuery(song: Song): string {
   return `${song.artist} - ${song.title}`;
 }
 
-interface YouTubeSearchOptions {
-  delayMs?: number;
-  useApiKey?: string; // YouTube Data API v3 key (optional, falls back to scraping)
-}
-
 export async function searchYouTube(
   song: Song,
-  opts: YouTubeSearchOptions = {}
 ): Promise<Omit<SongWithUrl, keyof Song>> {
   const query = buildSearchQuery(song);
 
   try {
-    if (opts.useApiKey) {
-      return await searchViaApi(query, opts.useApiKey);
-    }
     return await searchViaScraping(query);
   } catch (err) {
     return {
@@ -55,48 +46,6 @@ async function searchViaScraping(
     youtubeVideoId: best.id!,
     youtubeTitle: best.title!,
     youtubeDurationSec: best.duration ? Math.round(best.duration / 1000) : undefined,
-    searchStatus: "found",
-    searchedAt: new Date().toISOString(),
-  };
-}
-
-async function searchViaApi(
-  query: string,
-  apiKey: string
-): Promise<Omit<SongWithUrl, keyof Song>> {
-  const params = new URLSearchParams({
-    part: "snippet",
-    q: query,
-    type: "video",
-    maxResults: "5",
-    key: apiKey,
-  });
-
-  const res = await fetch(`https://www.googleapis.com/youtube/v3/search?${params}`);
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`YouTube API ${res.status}: ${body.slice(0, 200)}`);
-  }
-
-  const data = await res.json() as { items?: Array<{ id: { videoId: string }; snippet: { title: string } }> };
-  const items = data.items ?? [];
-
-  if (items.length === 0) {
-    return {
-      searchQuery: query,
-      searchStatus: "not_found",
-      searchedAt: new Date().toISOString(),
-    };
-  }
-
-  const videoId = items[0]!.id.videoId;
-  const title = items[0]!.snippet.title;
-
-  return {
-    searchQuery: query,
-    youtubeUrl: `https://www.youtube.com/watch?v=${videoId}`,
-    youtubeVideoId: videoId,
-    youtubeTitle: title,
     searchStatus: "found",
     searchedAt: new Date().toISOString(),
   };

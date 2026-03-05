@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Create dist directory
+        run: mkdir -p dist
+
+      - name: Build macOS (Apple Silicon)
+        run: bun run build:mac-arm
+
+      - name: Build macOS (Intel)
+        run: bun run build:mac-intel
+
+      - name: Build Windows (x64)
+        run: bun run build:win
+
+      - name: Build Linux (x64)
+        run: bun run build:linux
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/apple-mp3-mac-arm
+            dist/apple-mp3-mac-intel
+            dist/apple-mp3.exe
+            dist/apple-mp3-linux
+          body: |
+            ## apple-mp3 ${{ github.ref_name }}
+
+            Download the binary for your platform:
+
+            | Platform | File |
+            |---|---|
+            | macOS (Apple Silicon M1/M2/M3) | `apple-mp3-mac-arm` |
+            | macOS (Intel) | `apple-mp3-mac-intel` |
+            | Windows | `apple-mp3.exe` |
+            | Linux | `apple-mp3-linux` |
+
+            ### First Run
+
+            **macOS**: After downloading, right-click → Open (to bypass Gatekeeper on first launch).
+            Then run in Terminal: `chmod +x apple-mp3-mac-arm && ./apple-mp3-mac-arm`
+
+            **Windows**: Double-click `apple-mp3.exe`.
+
+            **Linux**: `chmod +x apple-mp3-linux && ./apple-mp3-linux`
+
+            A browser window will open at http://localhost:3000. yt-dlp will be downloaded automatically on first launch.

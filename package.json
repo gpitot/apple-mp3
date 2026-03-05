@@ -4,19 +4,29 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "start": "bun --hot src/server.ts",
     "cli": "bun run src/cli.ts",
     "fetch": "bun run src/cli.ts fetch",
     "search": "bun run src/cli.ts search",
     "download": "bun run src/cli.ts download",
-    "all": "bun run src/cli.ts all"
+    "all": "bun run src/cli.ts all",
+    "build:mac-arm": "bun build --compile --target=bun-darwin-arm64 src/server.ts --outfile dist/apple-mp3-mac-arm",
+    "build:mac-intel": "bun build --compile --target=bun-darwin-x64 src/server.ts --outfile dist/apple-mp3-mac-intel",
+    "build:win": "bun build --compile --target=bun-windows-x64 src/server.ts --outfile dist/apple-mp3.exe",
+    "build:linux": "bun build --compile --target=bun-linux-x64 src/server.ts --outfile dist/apple-mp3-linux",
+    "build:all": "bun run build:mac-arm && bun run build:mac-intel && bun run build:win && bun run build:linux"
   },
   "dependencies": {
     "fast-xml-parser": "^4.3.6",
     "p-limit": "^7.3.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "youtube-sr": "^4.3.11"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3"
   },
   "peerDependencies": {
     "typescript": "^5"
