@@ -25,7 +25,7 @@ export async function searchYouTube(
 }
 
 async function searchViaScraping(
-  query: string
+  query: string,
 ): Promise<Omit<SongWithUrl, keyof Song>> {
   const results = await YouTube.search(query, { limit: 5, type: "video" });
 
@@ -45,7 +45,9 @@ async function searchViaScraping(
     youtubeUrl: best.url!,
     youtubeVideoId: best.id!,
     youtubeTitle: best.title!,
-    youtubeDurationSec: best.duration ? Math.round(best.duration / 1000) : undefined,
+    youtubeDurationSec: best.duration
+      ? Math.round(best.duration / 1000)
+      : undefined,
     searchStatus: "found",
     searchedAt: new Date().toISOString(),
   };
@@ -70,6 +72,7 @@ function pickBestResult(results: Video[], query: string): Video {
     if (t.includes("cover")) score -= 5;
     if (t.includes("acoustic")) score -= 2;
     if (t.includes("karaoke")) score -= 10;
+    if (v.duration && v.duration > 15 * 60 * 1000) score -= 50; // deprioritize very long videos
     return { v, score };
   });
 

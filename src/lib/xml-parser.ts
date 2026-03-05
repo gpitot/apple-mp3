@@ -13,7 +13,7 @@ interface PlistDict {
 
 export async function parseItunesLibraryXml(
   filePath: string,
-  playlistFilter?: string
+  playlistFilter?: string,
 ): Promise<{ songs: Song[]; playlists: Playlist[] }> {
   log.info(`Parsing iTunes Library XML: ${filePath}`);
 
@@ -30,9 +30,15 @@ export async function parseItunesLibraryXml(
   // With preserveOrder, the structure is an array of ordered elements.
   // Find <plist> → <dict> inside it.
   const plistNode = findTag(parsed, "plist");
-  if (!plistNode) throw new Error("Unexpected XML structure — is this an iTunes Library export?");
+  if (!plistNode)
+    throw new Error(
+      "Unexpected XML structure — is this an iTunes Library export?",
+    );
   const topDictNode = findTag(plistNode, "dict");
-  if (!topDictNode) throw new Error("Unexpected XML structure — is this an iTunes Library export?");
+  if (!topDictNode)
+    throw new Error(
+      "Unexpected XML structure — is this an iTunes Library export?",
+    );
 
   // Build a flat map of the top-level plist dict
   const root = parsePlistDict(topDictNode);
@@ -47,7 +53,12 @@ export async function parseItunesLibraryXml(
     const td = trackData as PlistDict;
     const kind = String(td["Kind"] ?? "");
     // Only include Apple Music / audio tracks
-    if (kind && !kind.toLowerCase().includes("audio") && !kind.toLowerCase().includes("apple music")) continue;
+    if (
+      kind &&
+      !kind.toLowerCase().includes("audio") &&
+      !kind.toLowerCase().includes("apple music")
+    )
+      continue;
 
     const song: Song = {
       id: String(td["Track ID"] ?? trackId),
@@ -80,8 +91,10 @@ export async function parseItunesLibraryXml(
         .map((item) => String(item["Track ID"]))
         .filter((tid) => trackMap.has(tid));
 
-      if (songIds.length > 0) {
-        parsedPlaylists.push({ id, name, songIds });
+      const uniqueSongIds = Array.from(new Set(songIds));
+
+      if (uniqueSongIds.length > 0) {
+        parsedPlaylists.push({ id, name, songIds: uniqueSongIds });
       }
     }
   }
@@ -93,12 +106,14 @@ export async function parseItunesLibraryXml(
     const matched = parsedPlaylists.find(
       (p) =>
         p.name.toLowerCase() === playlistFilter.toLowerCase() ||
-        p.id === playlistFilter
+        p.id === playlistFilter,
     );
 
     if (!matched) {
       const names = parsedPlaylists.map((p) => `"${p.name}"`).join(", ");
-      throw new Error(`Playlist "${playlistFilter}" not found. Available: ${names}`);
+      throw new Error(
+        `Playlist "${playlistFilter}" not found. Available: ${names}`,
+      );
     }
 
     log.info(`Using playlist: "${matched.name}"`);
@@ -106,7 +121,12 @@ export async function parseItunesLibraryXml(
     const songs: Song[] = [];
     for (const songId of matched.songIds) {
       const song = trackMap.get(songId);
-      if (song) songs.push({ ...song, playlistId: matched.id, playlistName: matched.name });
+      if (song)
+        songs.push({
+          ...song,
+          playlistId: matched.id,
+          playlistName: matched.name,
+        });
     }
     return { songs, playlists: parsedPlaylists };
   }
@@ -176,7 +196,11 @@ function parsePlistArray(children: unknown[]): PlistDict[] {
 function findTag(arr: unknown, tagName: string): unknown[] | null {
   if (!Array.isArray(arr)) return null;
   for (const node of arr) {
-    if (typeof node === "object" && node !== null && tagName in (node as Record<string, unknown>)) {
+    if (
+      typeof node === "object" &&
+      node !== null &&
+      tagName in (node as Record<string, unknown>)
+    ) {
       return (node as Record<string, unknown>)[tagName] as unknown[];
     }
   }

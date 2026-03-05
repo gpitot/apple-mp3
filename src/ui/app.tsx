@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { createRoot } from "react-dom/client";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -41,6 +47,8 @@ interface FetchData {
 interface SongWithUrl extends Song {
   searchStatus: string;
   youtubeUrl?: string;
+  youtubeTitle?: string;
+  youtubeDurationSec?: number;
 }
 
 interface SearchData {
@@ -78,7 +86,7 @@ const css = `
   .stat { background: #111; border: 1px solid var(--border); border-radius: 6px; padding: 12px 18px; }
   .stat-val { font-size: 1.5rem; font-weight: 700; }
   .stat-label { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
-  .log { background: #111; border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-family: monospace; font-size: 0.8rem; line-height: 1.6; max-height: 320px; overflow-y: auto; color: #bbb; white-space: pre-wrap; word-break: break-all; }
+  .log { background: #111; border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-family: monospace; font-size: 0.8rem; line-height: 1.6; height: 320px; max-height: 320px; overflow-y: auto; color: #bbb; white-space: pre-wrap; word-break: break-all; }
   .log .info { color: #60a5fa; }
   .log .success { color: var(--green); }
   .log .warn { color: var(--yellow); }
@@ -111,21 +119,48 @@ const css = `
   .song-row:hover { background: #1a1a1a; }
   .song-row input[type="checkbox"] { margin: 0; flex-shrink: 0; }
   .song-row .song-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .song-row .yt-info { font-size: 0.75rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .song-row .yt-info a { color: #60a5fa; text-decoration: none; }
+  .song-row .yt-info a:hover { text-decoration: underline; }
+  .song-row .yt-duration { font-size: 0.75rem; color: var(--muted); flex-shrink: 0; }
+  .song-row-detail { flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 12px 6px 28px; }
+  .song-row-detail .song-row-top { display: flex; align-items: center; gap: 8px; width: 100%; }
   input[type="checkbox"] { width: auto; display: inline-block; margin-bottom: 0; }
 `;
 
 // ── SongList Component ──────────────────────────────────────────────────────────
+
+interface SongExtra {
+  youtubeUrl?: string;
+  youtubeTitle?: string;
+  youtubeDurationSec?: number;
+}
 
 interface SongListProps {
   songs: Song[];
   playlists: Playlist[];
   selectedIds: Set<string>;
   onSelectionChange: (ids: Set<string>) => void;
+  songExtras?: Map<string, SongExtra>;
 }
 
-function SongList({ songs, playlists, selectedIds, onSelectionChange }: SongListProps) {
+function formatDuration(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function SongList({
+  songs,
+  playlists,
+  selectedIds,
+  onSelectionChange,
+  songExtras,
+}: SongListProps) {
   const [search, setSearch] = useState("");
-  const [collapsedPlaylists, setCollapsedPlaylists] = useState<Set<string>>(new Set());
+  const [collapsedPlaylists, setCollapsedPlaylists] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Build a map of songId -> Song for quick lookup
   const songMap = useMemo(() => {
@@ -149,7 +184,11 @@ function SongList({ songs, playlists, selectedIds, onSelectionChange }: SongList
 
     const uncategorized = songs.filter((s) => !songIdsInPlaylists.has(s.id));
     if (uncategorized.length > 0) {
-      result.push({ name: "Uncategorized", id: "__uncategorized__", songIds: uncategorized.map((s) => s.id) });
+      result.push({
+        name: "Uncategorized",
+        id: "__uncategorized__",
+        songIds: uncategorized.map((s) => s.id),
+      });
     }
 
     return result;
@@ -166,11 +205,16 @@ function SongList({ songs, playlists, selectedIds, onSelectionChange }: SongList
         const filtered = g.songIds.filter((id) => {
           const s = songMap.get(id);
           if (!s) return false;
-          return (
+          if (
             s.title.toLowerCase().includes(lowerSearch) ||
             s.artist.toLowerCase().includes(lowerSearch) ||
             s.album.toLowerCase().includes(lowerSearch)
-          );
+          )
+            return true;
+          const extra = songExtras?.get(id);
+          if (extra?.youtubeTitle?.toLowerCase().includes(lowerSearch))
+            return true;
+          return false;
         });
         return { ...g, songIds: filtered };
       })
@@ -219,26 +263,43 @@ function SongList({ songs, playlists, selectedIds, onSelectionChange }: SongList
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <span className="selection-info">{selectedCount} / {totalSongs} selected</span>
-        <button className="btn-secondary" onClick={selectAll}>All</button>
-        <button className="btn-secondary" onClick={deselectAll}>None</button>
+        <span className="selection-info">
+          {selectedCount} / {totalSongs} selected
+        </span>
+        <button className="btn-secondary" onClick={selectAll}>
+          All
+        </button>
+        <button className="btn-secondary" onClick={deselectAll}>
+          None
+        </button>
       </div>
       <div className="song-list-container">
         {filteredGroups.map((g) => {
           const allSelected = g.songIds.every((id) => selectedIds.has(id));
-          const someSelected = !allSelected && g.songIds.some((id) => selectedIds.has(id));
+          const someSelected =
+            !allSelected && g.songIds.some((id) => selectedIds.has(id));
           const isCollapsed = collapsedPlaylists.has(g.id);
           return (
             <div key={g.id} className="playlist-group">
-              <div className="playlist-header" onClick={() => toggleCollapse(g.id)}>
+              <div
+                className="playlist-header"
+                onClick={() => toggleCollapse(g.id)}
+              >
                 <input
                   type="checkbox"
                   checked={allSelected}
-                  ref={(el) => { if (el) el.indeterminate = someSelected; }}
-                  onChange={(e) => { e.stopPropagation(); togglePlaylist(g.songIds); }}
+                  ref={(el) => {
+                    if (el) el.indeterminate = someSelected;
+                  }}
+                  onChange={(e) => {
+                    e.stopPropagation();
+                    togglePlaylist(g.songIds);
+                  }}
                   onClick={(e) => e.stopPropagation()}
                 />
-                <span className={`pl-arrow${isCollapsed ? " collapsed" : ""}`}>&#9660;</span>
+                <span className={`pl-arrow${isCollapsed ? " collapsed" : ""}`}>
+                  &#9660;
+                </span>
                 <span className="pl-name">{g.name}</span>
                 <span className="pl-count">{g.songIds.length} songs</span>
               </div>
@@ -246,14 +307,56 @@ function SongList({ songs, playlists, selectedIds, onSelectionChange }: SongList
                 g.songIds.map((id) => {
                   const s = songMap.get(id);
                   if (!s) return null;
+                  const extra = songExtras?.get(id);
+                  if (extra) {
+                    return (
+                      <div
+                        key={`${g.id}-${id}`}
+                        className="song-row song-row-detail"
+                      >
+                        <div className="song-row-top">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(id)}
+                            onChange={() => toggleSong(id)}
+                          />
+                          <span className="song-text">
+                            {s.artist} - {s.title}
+                          </span>
+                          {extra.youtubeDurationSec != null && (
+                            <span className="yt-duration">
+                              {formatDuration(extra.youtubeDurationSec)}
+                            </span>
+                          )}
+                        </div>
+                        {extra.youtubeTitle && (
+                          <div className="yt-info" style={{ paddingLeft: 22 }}>
+                            {extra.youtubeUrl ? (
+                              <a
+                                href={extra.youtubeUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {extra.youtubeTitle}
+                              </a>
+                            ) : (
+                              extra.youtubeTitle
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
                   return (
-                    <div key={id} className="song-row">
+                    <div key={`${g.id}-${id}`} className="song-row">
                       <input
                         type="checkbox"
                         checked={selectedIds.has(id)}
                         onChange={() => toggleSong(id)}
                       />
-                      <span className="song-text">{s.artist} - {s.title}</span>
+                      <span className="song-text">
+                        {s.artist} - {s.title}
+                      </span>
                     </div>
                   );
                 })}
@@ -261,7 +364,14 @@ function SongList({ songs, playlists, selectedIds, onSelectionChange }: SongList
           );
         })}
         {filteredGroups.length === 0 && (
-          <div style={{ padding: "20px", textAlign: "center", color: "var(--muted)", fontSize: "0.85rem" }}>
+          <div
+            style={{
+              padding: "20px",
+              textAlign: "center",
+              color: "var(--muted)",
+              fontSize: "0.85rem",
+            }}
+          >
             {search ? "No songs match your filter" : "No songs loaded"}
           </div>
         )}
@@ -286,12 +396,19 @@ function App() {
   // Song list state for Library tab
   const [librarySongs, setLibrarySongs] = useState<Song[]>([]);
   const [libraryPlaylists, setLibraryPlaylists] = useState<Playlist[]>([]);
-  const [librarySelected, setLibrarySelected] = useState<Set<string>>(new Set());
+  const [librarySelected, setLibrarySelected] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Song list state for Download tab
   const [downloadSongs, setDownloadSongs] = useState<Song[]>([]);
   const [downloadPlaylists, setDownloadPlaylists] = useState<Playlist[]>([]);
-  const [downloadSelected, setDownloadSelected] = useState<Set<string>>(new Set());
+  const [downloadSelected, setDownloadSelected] = useState<Set<string>>(
+    new Set(),
+  );
+  const [downloadExtras, setDownloadExtras] = useState<Map<string, SongExtra>>(
+    new Map(),
+  );
 
   // Load config + status on mount
   useEffect(() => {
@@ -317,7 +434,7 @@ function App() {
           setLibraryPlaylists(data.playlists ?? []);
           // Select all by default if nothing selected yet
           setLibrarySelected((prev) =>
-            prev.size === 0 ? new Set(data.songs.map((s) => s.id)) : prev
+            prev.size === 0 ? new Set(data.songs.map((s) => s.id)) : prev,
           );
         }
       })
@@ -333,8 +450,17 @@ function App() {
           setDownloadSongs(found);
           setDownloadPlaylists(data.playlists ?? []);
           setDownloadSelected((prev) =>
-            prev.size === 0 ? new Set(found.map((s) => s.id)) : prev
+            prev.size === 0 ? new Set(found.map((s) => s.id)) : prev,
           );
+          const extras = new Map<string, SongExtra>();
+          for (const s of found) {
+            extras.set(s.id, {
+              youtubeUrl: s.youtubeUrl,
+              youtubeTitle: s.youtubeTitle,
+              youtubeDurationSec: s.youtubeDurationSec,
+            });
+          }
+          setDownloadExtras(extras);
         }
       })
       .catch(() => {});
@@ -358,14 +484,57 @@ function App() {
     setLogs((prev) => [...prev, line]);
   };
 
-  const runJob = async (endpoint: string, body?: object) => {
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  // Recover running job state on mount
+  useEffect(() => {
+    fetch("/api/job-status")
+      .then((r) => r.json())
+      .then(
+        (job: { endpoint: string; status: string; error?: string } | null) => {
+          if (job && job.status === "running") {
+            setRunning(job.endpoint);
+            // Attach to SSE stream to pick up logs + completion
+            const es = new EventSource("/api/logs");
+            eventSourceRef.current = es;
+            es.onmessage = (e) => appendLog(e.data);
+            es.addEventListener("job-done", (e: MessageEvent) => {
+              const data = JSON.parse(e.data);
+              if (!data.ok)
+                appendLog(`ERROR: ${data.error ?? "Unknown error"}`);
+              else appendLog("Done.");
+              es.close();
+              eventSourceRef.current = null;
+              setRunning(null);
+              refreshStatus();
+            });
+          }
+        },
+      )
+      .catch(() => {});
+  }, []);
+
+  const runJob = async (
+    endpoint: string,
+    body?: object,
+    onDone?: () => void,
+  ) => {
     setLogs([]);
     setRunning(endpoint);
 
-    const eventSource = new EventSource("/api/logs");
-    eventSource.onmessage = (e) => {
-      appendLog(e.data);
-    };
+    const es = new EventSource("/api/logs");
+    eventSourceRef.current = es;
+    es.onmessage = (e) => appendLog(e.data);
+    es.addEventListener("job-done", (e: MessageEvent) => {
+      const data = JSON.parse(e.data);
+      if (!data.ok) appendLog(`ERROR: ${data.error ?? "Unknown error"}`);
+      else appendLog("Done.");
+      es.close();
+      eventSourceRef.current = null;
+      setRunning(null);
+      refreshStatus();
+      onDone?.();
+    });
 
     try {
       const res = await fetch(endpoint, {
@@ -376,15 +545,15 @@ function App() {
       const data = await res.json();
       if (!res.ok) {
         appendLog(`ERROR: ${data.error ?? "Unknown error"}`);
-      } else {
-        appendLog(`Done.`);
+        es.close();
+        eventSourceRef.current = null;
+        setRunning(null);
       }
     } catch (err: any) {
       appendLog(`ERROR: ${err.message}`);
-    } finally {
-      eventSource.close();
+      es.close();
+      eventSourceRef.current = null;
       setRunning(null);
-      refreshStatus();
     }
   };
 
@@ -409,9 +578,10 @@ function App() {
       body: formData,
     });
     const { path: xmlPath } = await res.json();
-    await runJob("/api/fetch", { fromXml: xmlPath });
-    loadLibrarySongs();
-    setTab("library");
+    runJob("/api/fetch", { fromXml: xmlPath }, () => {
+      loadLibrarySongs();
+      setTab("library");
+    });
   };
 
   const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -424,9 +594,10 @@ function App() {
       body: formData,
     });
     const { path: csvPath } = await res.json();
-    await runJob("/api/fetch", { fromCsv: csvPath });
-    loadLibrarySongs();
-    setTab("library");
+    runJob("/api/fetch", { fromCsv: csvPath }, () => {
+      loadLibrarySongs();
+      setTab("library");
+    });
   };
 
   const classForLog = (line: string): string => {
@@ -439,7 +610,10 @@ function App() {
   const handleSearchYouTube = () => {
     const allSelected = librarySelected.size === librarySongs.length;
     const body = allSelected ? {} : { songIds: Array.from(librarySelected) };
-    runJob("/api/search", body);
+    runJob("/api/search", body, () => {
+      loadDownloadSongs();
+      setTab("download");
+    });
   };
 
   const handleDownload = () => {
@@ -474,8 +648,10 @@ function App() {
               <p className="section-title">Import Library</p>
               <p className="hint">
                 Export your iTunes/Music library XML from{" "}
-                <strong>File &rarr; Library &rarr; Export Library&hellip;</strong> and upload it
-                here.
+                <strong>
+                  File &rarr; Library &rarr; Export Library&hellip;
+                </strong>{" "}
+                and upload it here.
               </p>
               <div className="flex-gap">
                 <label className="file-upload-label">
@@ -533,7 +709,9 @@ function App() {
                 <div className="stat-label">YouTube matches</div>
               </div>
               <div className="stat">
-                <div className="stat-val">{status.downloadedCount ?? "\u2014"}</div>
+                <div className="stat-val">
+                  {status.downloadedCount ?? "\u2014"}
+                </div>
                 <div className="stat-label">MP3s downloaded</div>
               </div>
             </div>
@@ -550,7 +728,9 @@ function App() {
             <div className="flex-gap spacer">
               <button
                 className="btn-secondary"
-                disabled={!!running || !status.songCount || librarySelected.size === 0}
+                disabled={
+                  !!running || !status.songCount || librarySelected.size === 0
+                }
                 onClick={handleSearchYouTube}
               >
                 {running === "/api/search"
@@ -580,7 +760,9 @@ function App() {
                 <div className="stat-label">Ready to download</div>
               </div>
               <div className="stat">
-                <div className="stat-val">{status.downloadedCount ?? "\u2014"}</div>
+                <div className="stat-val">
+                  {status.downloadedCount ?? "\u2014"}
+                </div>
                 <div className="stat-label">Downloaded</div>
               </div>
             </div>
@@ -591,13 +773,16 @@ function App() {
                 playlists={downloadPlaylists}
                 selectedIds={downloadSelected}
                 onSelectionChange={setDownloadSelected}
+                songExtras={downloadExtras}
               />
             )}
 
             <div className="flex-gap spacer">
               <button
                 className="btn-primary"
-                disabled={!!running || !status.foundCount || downloadSelected.size === 0}
+                disabled={
+                  !!running || !status.foundCount || downloadSelected.size === 0
+                }
                 onClick={handleDownload}
               >
                 {running === "/api/download"

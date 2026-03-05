@@ -114,7 +114,7 @@ async function fetchFromCsv(
   for (const song of songs) {
     const plName = song.playlistName ?? "Uncategorized";
     const ids = playlistMap.get(plName);
-    if (ids) {
+    if (ids && !ids.includes(song.id)) {
       ids.push(song.id);
     } else {
       playlistMap.set(plName, [song.id]);
