@@ -167,7 +167,6 @@ const server = Bun.serve({
     "/api/fetch": {
       POST: async (req: Request) => {
         const body: { fromXml?: string; fromCsv?: string } = await req.json();
-        const cfg = await loadConfig();
         try {
           await runFetch({
             outputFile: SONGS_FILE,
