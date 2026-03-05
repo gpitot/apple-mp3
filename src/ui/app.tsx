@@ -4,9 +4,6 @@ import { createRoot } from "react-dom/client";
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 interface Config {
-  appleDeveloperToken?: string;
-  appleMusicUserToken?: string;
-  youtubeApiKey?: string;
   outputDir?: string;
 }
 
@@ -209,8 +206,7 @@ function App() {
             <div className="card">
               <p className="section-title">Import Library</p>
               <p className="hint">
-                The easiest way is to export your iTunes/Music library XML from <strong>File → Library → Export Library…</strong> and upload it here.
-                Alternatively, use the Apple Music API credentials below.
+                Export your iTunes/Music library XML from <strong>File → Library → Export Library…</strong> and upload it here.
               </p>
               <div className="flex-gap">
                 <label className="file-upload-label">
@@ -222,37 +218,6 @@ function App() {
                   <input ref={csvFileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={handleCsvUpload} />
                 </label>
               </div>
-            </div>
-
-            <div className="card">
-              <p className="section-title">Apple Music API (optional)</p>
-              <p className="hint">Only needed if you want to fetch directly from the Apple Music API instead of uploading a file.</p>
-              <label>Apple Developer Token</label>
-              <input
-                type="password"
-                placeholder="eyJ..."
-                value={config.appleDeveloperToken ?? ""}
-                onChange={(e) => setConfig({ ...config, appleDeveloperToken: e.target.value })}
-              />
-              <label>Apple Music User Token</label>
-              <input
-                type="password"
-                placeholder="Am..."
-                value={config.appleMusicUserToken ?? ""}
-                onChange={(e) => setConfig({ ...config, appleMusicUserToken: e.target.value })}
-              />
-            </div>
-
-            <div className="card">
-              <p className="section-title">YouTube API Key (optional)</p>
-              <p className="hint">Without this, youtube-sr scraping is used. A key gives more reliable results.</p>
-              <label>YouTube Data API v3 Key</label>
-              <input
-                type="password"
-                placeholder="AIza..."
-                value={config.youtubeApiKey ?? ""}
-                onChange={(e) => setConfig({ ...config, youtubeApiKey: e.target.value })}
-              />
             </div>
 
             <div className="card">
@@ -291,13 +256,6 @@ function App() {
             </div>
 
             <div className="flex-gap spacer">
-              <button
-                className="btn-primary"
-                disabled={!!running}
-                onClick={() => runJob("/api/fetch", { fromApi: true })}
-              >
-                {running === "/api/fetch" ? "Fetching…" : "Fetch from API"}
-              </button>
               <button
                 className="btn-secondary"
                 disabled={!!running || !status.songCount}

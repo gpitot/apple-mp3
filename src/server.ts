@@ -25,9 +25,6 @@ const UPLOADS_DIR = path.join(APP_DIR, "uploads");
 // ── Config ─────────────────────────────────────────────────────────────────────
 
 interface Config {
-  appleDeveloperToken?: string;
-  appleMusicUserToken?: string;
-  youtubeApiKey?: string;
   outputDir?: string;
 }
 
@@ -161,10 +158,6 @@ const server = Bun.serve({
       POST: async (req: Request) => {
         const cfg: Config = await req.json();
         await saveConfig(cfg);
-        // Apply env vars for this process so API calls work immediately
-        if (cfg.appleDeveloperToken) process.env.APPLE_DEVELOPER_TOKEN = cfg.appleDeveloperToken;
-        if (cfg.appleMusicUserToken) process.env.APPLE_MUSIC_USER_TOKEN = cfg.appleMusicUserToken;
-        if (cfg.youtubeApiKey) process.env.YOUTUBE_API_KEY = cfg.youtubeApiKey;
         return Response.json({ ok: true });
       },
     },
@@ -194,7 +187,7 @@ const server = Bun.serve({
     // Fetch songs
     "/api/fetch": {
       POST: async (req: Request) => {
-        const body: { fromXml?: string; fromCsv?: string; fromApi?: boolean } = await req.json();
+        const body: { fromXml?: string; fromCsv?: string } = await req.json();
         const cfg = await loadConfig();
         try {
           await runFetch({
@@ -213,8 +206,6 @@ const server = Bun.serve({
     // Search YouTube
     "/api/search": {
       POST: async () => {
-        const cfg = await loadConfig();
-        if (cfg.youtubeApiKey) process.env.YOUTUBE_API_KEY = cfg.youtubeApiKey;
         try {
           await runSearch({
             inputFile: SONGS_FILE,
@@ -262,12 +253,6 @@ if (process.platform === "darwin") {
 } else {
   Bun.$`xdg-open ${url}`.quiet().catch(() => {});
 }
-
-// Set env vars from saved config on startup
-const cfg = await loadConfig();
-if (cfg.appleDeveloperToken) process.env.APPLE_DEVELOPER_TOKEN = cfg.appleDeveloperToken;
-if (cfg.appleMusicUserToken) process.env.APPLE_MUSIC_USER_TOKEN = cfg.appleMusicUserToken;
-if (cfg.youtubeApiKey) process.env.YOUTUBE_API_KEY = cfg.youtubeApiKey;
 
 // Download/update yt-dlp in background
 setupYtDlp();

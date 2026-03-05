@@ -5,7 +5,7 @@
  * Writes: output/songs-with-urls.json
  *
  * Resumable: songs already with status "found" or "not_found" are skipped.
- * Set YOUTUBE_API_KEY for reliable searches, otherwise scraping is used.
+ * Uses youtube-sr scraping to find videos.
  */
 import { log } from "../lib/logger";
 import type { FetchOutput, Playlist, SearchOutput, SongWithUrl } from "../lib/types";
@@ -59,7 +59,6 @@ export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
   }
 
   const delay = opts.delayMs ?? 800;
-  const apiKey = process.env.YOUTUBE_API_KEY;
   const songs = opts.limitTo ? filteredSongs.slice(0, opts.limitTo) : filteredSongs;
   const total = songs.length;
 
@@ -82,7 +81,7 @@ export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
 
     log.step(i + 1, total, `${song.artist} - ${song.title}`);
 
-    const result = await searchYouTube(song, { useApiKey: apiKey });
+    const result = await searchYouTube(song);
     const songWithUrl: SongWithUrl = { ...song, ...result };
     results.push(songWithUrl);
 
