@@ -181,13 +181,41 @@ const server = Bun.serve({
       },
     },
 
+    // Get songs (for Library tab song list)
+    "/api/songs": {
+      GET: async () => {
+        const f = Bun.file(SONGS_FILE);
+        if (await f.exists()) {
+          return new Response(await f.text(), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return Response.json(null);
+      },
+    },
+
+    // Get songs with URLs (for Download tab song list)
+    "/api/songs-with-urls": {
+      GET: async () => {
+        const f = Bun.file(SONGS_WITH_URLS_FILE);
+        if (await f.exists()) {
+          return new Response(await f.text(), {
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return Response.json(null);
+      },
+    },
+
     // Search YouTube
     "/api/search": {
-      POST: async () => {
+      POST: async (req: Request) => {
+        const body: { songIds?: string[] } = await req.json().catch(() => ({}));
         try {
           await runSearch({
             inputFile: SONGS_FILE,
             outputFile: SONGS_WITH_URLS_FILE,
+            songIds: body.songIds,
           });
           return Response.json({ ok: true });
         } catch (err: any) {
@@ -198,7 +226,8 @@ const server = Bun.serve({
 
     // Download MP3s
     "/api/download": {
-      POST: async () => {
+      POST: async (req: Request) => {
+        const body: { songIds?: string[] } = await req.json().catch(() => ({}));
         const cfg = await loadConfig();
         const outputDir = cfg.outputDir
           ? cfg.outputDir.replace(/^~/, os.homedir())
@@ -208,6 +237,7 @@ const server = Bun.serve({
             inputFile: SONGS_WITH_URLS_FILE,
             statusFile: DOWNLOAD_STATUS_FILE,
             outputDir,
+            songIds: body.songIds,
           });
           return Response.json({ ok: true });
         } catch (err: any) {

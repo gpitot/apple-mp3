@@ -31,6 +31,7 @@ export interface DownloadOptions {
   onlyPlaylist?: string;
   delayMs?: number;
   concurrency?: number;
+  songIds?: string[]; // Only download these specific song IDs
 }
 
 export async function runDownload(
@@ -52,6 +53,13 @@ export async function runDownload(
   const input: SearchOutput = JSON.parse(inputRaw);
 
   let songs = input.songs.filter((s) => s.searchStatus === "found");
+
+  if (opts.songIds) {
+    const idSet = new Set(opts.songIds);
+    const before = songs.length;
+    songs = songs.filter((s) => idSet.has(s.id));
+    log.info(`Filtered to ${songs.length}/${before} selected songs`);
+  }
 
   // Skip songs over 6 minutes (likely extended mixes or live recordings)
   const MAX_DURATION_SEC = 360;

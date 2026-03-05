@@ -18,6 +18,7 @@ export interface SearchOptions {
   limitTo?: number;   // Only process first N songs (for testing)
   resume?: boolean;   // Skip already-searched songs (default: true)
   playlistFilter?: string; // Only search songs from this playlist (name or ID)
+  songIds?: string[]; // Only search these specific song IDs
 }
 
 export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
@@ -45,6 +46,13 @@ export async function runSearch(opts: SearchOptions): Promise<SearchOutput> {
   }
 
   let filteredSongs = input.songs;
+
+  if (opts.songIds) {
+    const idSet = new Set(opts.songIds);
+    const before = filteredSongs.length;
+    filteredSongs = filteredSongs.filter((s) => idSet.has(s.id));
+    log.info(`Filtered to ${filteredSongs.length}/${before} selected songs`);
+  }
 
   if (opts.playlistFilter) {
     const before = filteredSongs.length;
