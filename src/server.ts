@@ -149,6 +149,17 @@ const server = Bun.serve({
       },
     },
 
+    "/api/preflight": {
+      GET: async () => {
+        try {
+          const result = await Bun.$`yt-dlp --version`.quiet();
+          return Response.json({ ytDlp: true, version: result.text().trim() });
+        } catch {
+          return Response.json({ ytDlp: false });
+        }
+      },
+    },
+
     "/api/status": {
       GET: async () => Response.json(await getStatus()),
     },

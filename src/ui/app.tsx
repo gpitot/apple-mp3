@@ -383,6 +383,7 @@ function SongList({
 // ── App ────────────────────────────────────────────────────────────────────────
 
 function App() {
+  const [ytDlpInstalled, setYtDlpInstalled] = useState<boolean | null>(null);
   const [tab, setTab] = useState<"setup" | "library" | "download">("setup");
   const [config, setConfig] = useState<Config>({});
   const [status, setStatus] = useState<Status>({});
@@ -392,6 +393,13 @@ function App() {
   const logRef = useRef<HTMLDivElement>(null);
   const xmlFileRef = useRef<HTMLInputElement>(null);
   const csvFileRef = useRef<HTMLInputElement>(null);
+
+  const checkPreflight = useCallback(() => {
+    fetch("/api/preflight")
+      .then((r) => r.json())
+      .then((data: { ytDlp: boolean }) => setYtDlpInstalled(data.ytDlp))
+      .catch(() => setYtDlpInstalled(false));
+  }, []);
 
   // Song list state for Library tab
   const [librarySongs, setLibrarySongs] = useState<Song[]>([]);
@@ -410,8 +418,9 @@ function App() {
     new Map(),
   );
 
-  // Load config + status on mount
+  // Check preflight + load config + status on mount
   useEffect(() => {
+    checkPreflight();
     fetch("/api/config")
       .then((r) => r.json())
       .then((c: Config) => setConfig(c))
@@ -621,6 +630,49 @@ function App() {
     const body = allSelected ? {} : { songIds: Array.from(downloadSelected) };
     runJob("/api/download", body);
   };
+
+  if (ytDlpInstalled === null) {
+    return (
+      <>
+        <style>{css}</style>
+        <div className="app" style={{ textAlign: "center", paddingTop: 120 }}>
+          <p style={{ color: "var(--muted)" }}>Loading…</p>
+        </div>
+      </>
+    );
+  }
+
+  if (ytDlpInstalled === false) {
+    return (
+      <>
+        <style>{css}</style>
+        <div className="app" style={{ textAlign: "center", paddingTop: 80 }}>
+          <h1>apple-mp3</h1>
+          <div className="card" style={{ maxWidth: 480, margin: "32px auto" }}>
+            <p className="section-title" style={{ color: "var(--accent)" }}>
+              yt-dlp not found
+            </p>
+            <p className="hint" style={{ marginBottom: 16 }}>
+              This app requires <strong>yt-dlp</strong> to download MP3s from
+              YouTube. Please install it and try again.
+            </p>
+            <p style={{ marginBottom: 16 }}>
+              Install yt-dlp by following the instructions on their{" "}
+              <a
+                style={{ color: "white" }}
+                href="https://github.com/yt-dlp/yt-dlp?tab=readme-ov-file#installation"
+              >
+                GitHub
+              </a>
+            </p>
+            <button className="btn-primary" onClick={checkPreflight}>
+              Retry
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
