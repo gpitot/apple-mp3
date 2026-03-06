@@ -61,71 +61,163 @@ interface SearchData {
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
 const css = `
-  :root { --bg: #0d0d0d; --surface: #1a1a1a; --border: #2e2e2e; --accent: #fa586a; --text: #e8e8e8; --muted: #888; --green: #4ade80; --yellow: #facc15; }
-  body { background: var(--bg); color: var(--text); }
-  .app { max-width: 780px; margin: 0 auto; padding: 32px 20px; }
-  h1 { font-size: 1.6rem; font-weight: 700; color: var(--accent); margin-bottom: 4px; }
-  .subtitle { color: var(--muted); font-size: 0.85rem; margin-bottom: 28px; }
-  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
-  .tab { padding: 8px 18px; border: none; background: none; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; font-size: 0.9rem; transition: color 0.15s; }
-  .tab:hover { color: var(--text); }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
-  label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
-  input { display: block; width: 100%; background: #111; border: 1px solid var(--border); border-radius: 6px; padding: 9px 12px; color: var(--text); font-size: 0.9rem; margin-bottom: 14px; outline: none; }
-  input:focus { border-color: var(--accent); }
+  /* ── Pastel Cartoon Variables ── */
+  :root {
+    --bg-grad-start: #fff0fb;
+    --bg-grad-end: #f0f4ff;
+    --surface: #ffffff;
+    --border: #2a2a2a;
+    --shadow: 4px 4px 0 #2a2a2a;
+    --shadow-sm: 2px 2px 0 #2a2a2a;
+    --accent: #ff6b8a;
+    --accent-dark: #d94f6e;
+    --text: #2a2a2a;
+    --muted: #7a6b7f;
+    --green: #3dba6f;
+    --green-bg: #d4f5e2;
+    --yellow: #c49a00;
+    --yellow-bg: #fff8d4;
+    --tab-setup: #ffb3ba;
+    --tab-library: #c9b8ff;
+    --tab-download: #b8f0c9;
+    --radius-card: 16px;
+    --radius-btn: 12px;
+    --radius-input: 10px;
+    --radius-badge: 6px;
+  }
+  body {
+    background: linear-gradient(135deg, var(--bg-grad-start) 0%, var(--bg-grad-end) 100%);
+    background-attachment: fixed;
+    color: var(--text);
+  }
+  .app { max-width: 780px; margin: 0 auto; padding: 36px 20px; }
+  h1 {
+    font-family: 'Fredoka One', cursive;
+    font-size: 2rem;
+    font-weight: 400;
+    color: var(--accent);
+    text-shadow: 2px 2px 0 #2a2a2a;
+    letter-spacing: 0.02em;
+    margin-bottom: 4px;
+  }
+  .subtitle { color: var(--muted); font-size: 0.9rem; font-weight: 600; margin-bottom: 32px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 28px; }
+  .tab {
+    padding: 10px 22px;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-btn);
+    background: var(--surface);
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 700;
+    font-family: 'Nunito', sans-serif;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .tab:hover { transform: translateY(-2px); box-shadow: 4px 6px 0 #2a2a2a; color: var(--text); }
+  .tab.active[data-tab="setup"]    { background: var(--tab-setup);    color: var(--text); box-shadow: var(--shadow); }
+  .tab.active[data-tab="library"]  { background: var(--tab-library);  color: var(--text); box-shadow: var(--shadow); }
+  .tab.active[data-tab="download"] { background: var(--tab-download); color: var(--text); box-shadow: var(--shadow); }
+  .tab.active { background: var(--tab-setup); color: var(--text); border-color: var(--border); box-shadow: var(--shadow); }
+  .card { background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-card); padding: 22px; margin-bottom: 18px; box-shadow: var(--shadow); }
+  label { display: block; font-size: 0.78rem; font-weight: 700; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+  input {
+    display: block; width: 100%;
+    background: #fdf6ff;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-input);
+    padding: 10px 13px;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: 'Nunito', sans-serif;
+    font-weight: 600;
+    margin-bottom: 14px;
+    outline: none;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input:focus { border-color: var(--accent); box-shadow: 3px 3px 0 var(--accent-dark); }
   .row { display: flex; gap: 10px; }
   .row input { flex: 1; }
-  button { padding: 9px 20px; border-radius: 6px; border: none; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: opacity 0.15s; }
-  button:disabled { opacity: 0.4; cursor: not-allowed; }
-  .btn-primary { background: var(--accent); color: white; }
-  .btn-primary:hover:not(:disabled) { opacity: 0.85; }
-  .btn-secondary { background: #2e2e2e; color: var(--text); }
-  .btn-secondary:hover:not(:disabled) { background: #3a3a3a; }
-  .stat-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; }
-  .stat { background: #111; border: 1px solid var(--border); border-radius: 6px; padding: 12px 18px; }
-  .stat-val { font-size: 1.5rem; font-weight: 700; }
-  .stat-label { font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
-  .log { background: #111; border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-family: monospace; font-size: 0.8rem; line-height: 1.6; height: 320px; max-height: 320px; overflow-y: auto; color: #bbb; white-space: pre-wrap; word-break: break-all; }
-  .log .info { color: #60a5fa; }
-  .log .success { color: var(--green); }
-  .log .warn { color: var(--yellow); }
-  .log .error { color: var(--accent); }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
-  .badge-green { background: #052c14; color: var(--green); }
-  .badge-red { background: #2c0506; color: var(--accent); }
-  .badge-yellow { background: #2c1f05; color: var(--yellow); }
-  .hint { font-size: 0.8rem; color: var(--muted); margin-bottom: 14px; line-height: 1.5; }
-  .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 14px; }
-  .file-upload-label { display: inline-block; padding: 9px 20px; background: #2e2e2e; border-radius: 6px; cursor: pointer; font-size: 0.9rem; margin-bottom: 14px; }
-  .file-upload-label:hover { background: #3a3a3a; }
-  .spacer { margin-bottom: 10px; }
+  button {
+    padding: 10px 22px;
+    border-radius: var(--radius-btn);
+    border: 2px solid var(--border);
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 700;
+    font-family: 'Nunito', sans-serif;
+    box-shadow: var(--shadow);
+    transition: transform 0.12s, box-shadow 0.12s, opacity 0.12s;
+  }
+  button:hover:not(:disabled) { transform: translateY(-2px) scale(1.02); box-shadow: 5px 6px 0 #2a2a2a; }
+  button:active:not(:disabled) { transform: translateY(1px) scale(0.99); box-shadow: 2px 2px 0 #2a2a2a; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: 2px 2px 0 #aaa; border-color: #aaa; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-dark); }
+  .btn-secondary { background: #ede8ff; color: var(--text); }
+  .btn-secondary:hover:not(:disabled) { background: #ddd4ff; }
+  .stat-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stat { background: var(--surface); border: 2px solid var(--border); border-radius: 14px; padding: 14px 20px; box-shadow: var(--shadow-sm); min-width: 100px; }
+  .stat-val { font-family: 'Fredoka One', cursive; font-size: 1.7rem; font-weight: 400; color: var(--accent); letter-spacing: 0.02em; }
+  .stat-label { font-size: 0.72rem; font-weight: 700; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .log {
+    background: #1e1a2e;
+    border: 2px solid var(--border);
+    border-radius: var(--radius-card);
+    padding: 16px;
+    font-family: 'Courier New', 'Menlo', monospace;
+    font-size: 0.78rem;
+    line-height: 1.7;
+    height: 320px; max-height: 320px;
+    overflow-y: auto;
+    color: #ccc;
+    white-space: pre-wrap;
+    word-break: break-all;
+    box-shadow: var(--shadow);
+  }
+  .log .info    { color: #93c5fd; }
+  .log .success { color: #6ee7a0; }
+  .log .warn    { color: #fde68a; }
+  .log .error   { color: #fca5a5; }
+  .badge { display: inline-block; padding: 3px 9px; border-radius: var(--radius-badge); border: 1.5px solid var(--border); font-size: 0.72rem; font-weight: 700; font-family: 'Nunito', sans-serif; }
+  .badge-green  { background: var(--green-bg); color: var(--green); }
+  .badge-red    { background: #ffe4ea; color: #d94f6e; }
+  .badge-yellow { background: var(--yellow-bg); color: var(--yellow); }
+  .hint { font-size: 0.82rem; font-weight: 600; color: var(--muted); margin-bottom: 16px; line-height: 1.6; }
+  .section-title { font-family: 'Fredoka One', cursive; font-size: 1.1rem; font-weight: 400; color: var(--text); margin-bottom: 14px; letter-spacing: 0.01em; }
+  .file-upload-label { display: inline-block; padding: 10px 22px; background: #fff4b8; border: 2px solid var(--border); border-radius: var(--radius-btn); cursor: pointer; font-size: 0.9rem; font-weight: 700; font-family: 'Nunito', sans-serif; box-shadow: var(--shadow); transition: transform 0.12s, box-shadow 0.12s; margin-bottom: 14px; }
+  .file-upload-label:hover { background: #ffe97a; transform: translateY(-2px) scale(1.02); box-shadow: 5px 6px 0 #2a2a2a; }
+  .spacer { margin-bottom: 12px; }
   .flex-gap { display: flex; gap: 10px; flex-wrap: wrap; }
-
-  .song-list-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .song-list-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
   .song-list-toolbar input[type="text"] { flex: 1; min-width: 180px; margin-bottom: 0; }
-  .song-list-toolbar .selection-info { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
-  .song-list-toolbar button { padding: 6px 14px; font-size: 0.8rem; }
-  .song-list-container { background: #111; border: 1px solid var(--border); border-radius: 6px; max-height: 400px; overflow-y: auto; margin-bottom: 14px; }
+  .song-list-toolbar .selection-info { font-size: 0.8rem; font-weight: 700; color: var(--muted); white-space: nowrap; }
+  .song-list-toolbar button { padding: 7px 15px; font-size: 0.8rem; }
+  .song-list-container { background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius-card); max-height: 400px; overflow-y: auto; margin-bottom: 16px; box-shadow: var(--shadow); }
   .playlist-group {}
-  .playlist-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #1e1e1e; border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; position: sticky; top: 0; z-index: 1; }
-  .playlist-header:hover { background: #252525; }
+  .playlist-header { display: flex; align-items: center; gap: 8px; padding: 9px 14px; background: #f3eeff; border-bottom: 2px solid var(--border); cursor: pointer; user-select: none; position: sticky; top: 0; z-index: 1; }
+  .playlist-header:hover { background: #ebe3ff; }
   .playlist-header input[type="checkbox"] { margin: 0; flex-shrink: 0; }
-  .playlist-header .pl-name { font-weight: 600; font-size: 0.85rem; }
-  .playlist-header .pl-count { font-size: 0.75rem; color: var(--muted); margin-left: auto; }
-  .playlist-header .pl-arrow { font-size: 0.7rem; color: var(--muted); transition: transform 0.15s; }
+  .playlist-header .pl-name { font-weight: 700; font-size: 0.87rem; color: var(--text); }
+  .playlist-header .pl-count { font-size: 0.75rem; font-weight: 600; color: var(--muted); margin-left: auto; }
+  .playlist-header .pl-arrow { font-size: 0.72rem; color: var(--muted); transition: transform 0.15s; }
   .playlist-header .pl-arrow.collapsed { transform: rotate(-90deg); }
-  .song-row { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 28px; border-bottom: 1px solid #1a1a1a; font-size: 0.8rem; color: var(--muted); }
-  .song-row:hover { background: #1a1a1a; }
+  .song-row { display: flex; align-items: center; gap: 8px; padding: 5px 14px 5px 30px; border-bottom: 1px solid #f0eaff; font-size: 0.8rem; font-weight: 600; color: var(--muted); transition: background 0.1s; }
+  .song-row:hover { background: #fdf6ff; }
   .song-row input[type="checkbox"] { margin: 0; flex-shrink: 0; }
-  .song-row .song-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .song-row .song-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
   .song-row .yt-info { font-size: 0.75rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .song-row .yt-info a { color: #60a5fa; text-decoration: none; }
+  .song-row .yt-info a { color: #7c5cbf; text-decoration: none; }
   .song-row .yt-info a:hover { text-decoration: underline; }
-  .song-row .yt-duration { font-size: 0.75rem; color: var(--muted); flex-shrink: 0; }
-  .song-row-detail { flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 12px 6px 28px; }
+  .song-row .yt-duration { font-size: 0.74rem; color: var(--muted); flex-shrink: 0; }
+  .song-row-detail { flex-direction: column; align-items: flex-start; gap: 2px; padding: 7px 14px 7px 30px; }
   .song-row-detail .song-row-top { display: flex; align-items: center; gap: 8px; width: 100%; }
-  input[type="checkbox"] { width: auto; display: inline-block; margin-bottom: 0; }
+  input[type="checkbox"] { width: auto; display: inline-block; margin-bottom: 0; accent-color: var(--accent); }
+  .log::-webkit-scrollbar, .song-list-container::-webkit-scrollbar { width: 6px; }
+  .log::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+  .song-list-container::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
 `;
 
 // ── SongList Component ──────────────────────────────────────────────────────────
@@ -698,7 +790,7 @@ function App() {
             <p style={{ marginBottom: 16 }}>
               Install yt-dlp by following the instructions on their{" "}
               <a
-                style={{ color: "white" }}
+                style={{ color: "var(--accent)" }}
                 href="https://github.com/yt-dlp/yt-dlp?tab=readme-ov-file#installation"
               >
                 GitHub
@@ -724,6 +816,7 @@ function App() {
           {(["setup", "library", "download"] as const).map((t) => (
             <button
               key={t}
+              data-tab={t}
               className={`tab${tab === t ? " active" : ""}`}
               onClick={() => setTab(t)}
             >
